@@ -1,0 +1,136 @@
+services:
+  rabbitmq:
+    image: rabbitmq:4-management
+    ports: ["127.0.0.1:5672:5672", "127.0.0.1:15672:15672"]
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Copy .env.example to .env}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Copy .env.example to .env}
+    volumes: ["rabbitmq-data:/var/lib/rabbitmq"]
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  user-service:
+    build: ./src/user-service
+    ports: ["127.0.0.1:8081:8080"]
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      MONGODB_URI: mongodb://user-db:27017/user_db
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      user-db:
+        condition: service_healthy
+  user-db:
+    image: mongo:8.0
+    volumes: ["user-data:/data/db"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  driver-service:
+    build: ./src/driver-service
+    ports: ["127.0.0.1:8082:8080"]
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      MONGODB_URI: mongodb://driver-db:27017/driver_db
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      driver-db:
+        condition: service_healthy
+  driver-db:
+    image: mongo:8.0
+    volumes: ["driver-data:/data/db"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  trip-service:
+    build: ./src/trip-service
+    ports: ["127.0.0.1:8083:8080"]
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      MONGODB_URI: mongodb://trip-db:27017/trip_db
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      trip-db:
+        condition: service_healthy
+  trip-db:
+    image: mongo:8.0
+    volumes: ["trip-data:/data/db"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  matching-service:
+    build: ./src/matching-service
+    ports: ["127.0.0.1:8084:8080"]
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      DRIVER_SERVICE_URL: http://driver-service:8080
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+  payment-service:
+    build: ./src/payment-service
+    ports: ["127.0.0.1:8085:8080"]
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      MONGODB_URI: mongodb://payment-db:27017/payment_db
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      payment-db:
+        condition: service_healthy
+  payment-db:
+    image: mongo:8.0
+    volumes: ["payment-data:/data/db"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+  notification-service:
+    build: ./src/notification-service
+    ports: ["127.0.0.1:8086:8080"]
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      MONGODB_URI: mongodb://notification-db:27017/notification_db
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      notification-db:
+        condition: service_healthy
+  notification-db:
+    image: mongo:8.0
+    volumes: ["notification-data:/data/db"]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+volumes:
+  rabbitmq-data:
+  user-data:
+  driver-data:
+  trip-data:
+  payment-data:
+  notification-data:

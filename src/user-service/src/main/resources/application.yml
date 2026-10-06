@@ -1,0 +1,20 @@
+server:
+  port: ${SERVER_PORT:8080}
+spring:
+  application:
+    name: user-service
+  mongodb:
+    uri: ${MONGODB_URI:mongodb://localhost:27017/user_db}
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
