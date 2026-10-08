@@ -1,4 +1,22 @@
 services:
+  mysql:
+    image: mysql:8.4
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Copy .env.example to .env}
+      MYSQL_USER_PASSWORD: ${MYSQL_USER_PASSWORD:?Copy .env.example to .env}
+      MYSQL_DRIVER_PASSWORD: ${MYSQL_DRIVER_PASSWORD:?Copy .env.example to .env}
+      MYSQL_TRIP_PASSWORD: ${MYSQL_TRIP_PASSWORD:?Copy .env.example to .env}
+      MYSQL_PAYMENT_PASSWORD: ${MYSQL_PAYMENT_PASSWORD:?Copy .env.example to .env}
+      MYSQL_NOTIFICATION_PASSWORD: ${MYSQL_NOTIFICATION_PASSWORD:?Copy .env.example to .env}
+    volumes:
+      - mysql-data:/var/lib/mysql
+      - ./docker/mysql/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_ROOT_PASSWORD\" mysql --protocol=TCP -h 127.0.0.1 -uroot --execute='SELECT 1' --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 18
+      start_period: 30s
   rabbitmq:
     image: rabbitmq:4-management
     ports: ["127.0.0.1:5672:5672", "127.0.0.1:15672:15672"]
@@ -18,20 +36,14 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      MONGODB_URI: mongodb://user-db:27017/user_db
+      MYSQL_HOST: mysql
+      MYSQL_USERNAME: user_app
+      MYSQL_PASSWORD: ${MYSQL_USER_PASSWORD}
     depends_on:
       rabbitmq:
         condition: service_healthy
-      user-db:
+      mysql:
         condition: service_healthy
-  user-db:
-    image: mongo:8.0
-    volumes: ["user-data:/data/db"]
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
   driver-service:
     build: ./src/driver-service
     ports: ["127.0.0.1:8082:8080"]
@@ -39,20 +51,14 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      MONGODB_URI: mongodb://driver-db:27017/driver_db
+      MYSQL_HOST: mysql
+      MYSQL_USERNAME: driver_app
+      MYSQL_PASSWORD: ${MYSQL_DRIVER_PASSWORD}
     depends_on:
       rabbitmq:
         condition: service_healthy
-      driver-db:
+      mysql:
         condition: service_healthy
-  driver-db:
-    image: mongo:8.0
-    volumes: ["driver-data:/data/db"]
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
   trip-service:
     build: ./src/trip-service
     ports: ["127.0.0.1:8083:8080"]
@@ -60,20 +66,44 @@ services:
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      MONGODB_URI: mongodb://trip-db:27017/trip_db
+      MYSQL_HOST: mysql
+      MYSQL_USERNAME: trip_app
+      MYSQL_PASSWORD: ${MYSQL_TRIP_PASSWORD}
     depends_on:
       rabbitmq:
         condition: service_healthy
-      trip-db:
+      mysql:
         condition: service_healthy
-  trip-db:
-    image: mongo:8.0
-    volumes: ["trip-data:/data/db"]
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
+  payment-service:
+    build: ./src/payment-service
+    ports: ["127.0.0.1:8085:8080"]
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      MYSQL_HOST: mysql
+      MYSQL_USERNAME: payment_app
+      MYSQL_PASSWORD: ${MYSQL_PAYMENT_PASSWORD}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
+  notification-service:
+    build: ./src/notification-service
+    ports: ["127.0.0.1:8086:8080"]
+    environment:
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      MYSQL_HOST: mysql
+      MYSQL_USERNAME: notification_app
+      MYSQL_PASSWORD: ${MYSQL_NOTIFICATION_PASSWORD}
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      mysql:
+        condition: service_healthy
   matching-service:
     build: ./src/matching-service
     ports: ["127.0.0.1:8084:8080"]
@@ -85,52 +115,6 @@ services:
     depends_on:
       rabbitmq:
         condition: service_healthy
-  payment-service:
-    build: ./src/payment-service
-    ports: ["127.0.0.1:8085:8080"]
-    environment:
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_USER: ${RABBITMQ_USER}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      MONGODB_URI: mongodb://payment-db:27017/payment_db
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      payment-db:
-        condition: service_healthy
-  payment-db:
-    image: mongo:8.0
-    volumes: ["payment-data:/data/db"]
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
-  notification-service:
-    build: ./src/notification-service
-    ports: ["127.0.0.1:8086:8080"]
-    environment:
-      RABBITMQ_HOST: rabbitmq
-      RABBITMQ_USER: ${RABBITMQ_USER}
-      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      MONGODB_URI: mongodb://notification-db:27017/notification_db
-    depends_on:
-      rabbitmq:
-        condition: service_healthy
-      notification-db:
-        condition: service_healthy
-  notification-db:
-    image: mongo:8.0
-    volumes: ["notification-data:/data/db"]
-    healthcheck:
-      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand({ping:1})"]
-      interval: 10s
-      timeout: 5s
-      retries: 12
 volumes:
   rabbitmq-data:
-  user-data:
-  driver-data:
-  trip-data:
-  payment-data:
-  notification-data:
+  mysql-data:
