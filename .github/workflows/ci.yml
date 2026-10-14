@@ -22,6 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: cp .env.example .env
+      - name: Generate temporary JWT key for CI
+        run: echo "JWT_SECRET=$(openssl rand -base64 32)" >> .env
       - run: docker compose config --quiet
       - run: docker compose up -d --build
       - name: Check database ownership boundaries
