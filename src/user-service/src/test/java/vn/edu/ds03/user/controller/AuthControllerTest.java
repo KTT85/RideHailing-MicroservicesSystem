@@ -45,7 +45,7 @@ class AuthControllerTest {
     void successReturns201WithoutPassword() throws Exception {
         when(service.register(any())).thenReturn(new UserResponse("sample-id", "Demo User",
                 "user@example.com", "0912345678", User.Role.PASSENGER, User.UserStatus.ACTIVE,
-                OffsetDateTime.parse("2026-10-13T14:00:00+07:00")));
+                OffsetDateTime.parse("2026-10-13T07:00:00Z")));
         String body = mvc.perform(post("/auth/register").contentType(MediaType.APPLICATION_JSON)
                 .content(VALID)).andExpect(status().isCreated()).andReturn().getResponse().getContentAsString();
         assertTrue(body.contains("sample-id"));

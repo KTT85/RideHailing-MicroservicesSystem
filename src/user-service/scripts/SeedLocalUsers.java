@@ -15,7 +15,7 @@ class SeedLocalUsers {
         String port = System.getenv().getOrDefault("MYSQL_PORT", "3306");
         String username = System.getenv().getOrDefault("MYSQL_USERNAME", "user_app");
         String url = "jdbc:mysql://" + host + ":" + port
-                + "/user_db?connectionTimeZone=%2B07:00&forceConnectionTimeZoneToSession=true"
+                + "/user_db?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true"
                 + "&sslMode=DISABLED&allowPublicKeyRetrieval=true";
         String[][] accounts = {
             {"admin", "admin@ds03.test", "0900000001", "ADMIN"},
@@ -45,7 +45,6 @@ class SeedLocalUsers {
                 connection.commit();
             } catch (Exception failure) {
                 connection.rollback();
-                // Avoid printing SQL or credential information from driver exceptions.
                 throw new IllegalStateException("Seed failed; transaction rolled back. Check DB connection, schema and unique phone constraints.");
             }
         }

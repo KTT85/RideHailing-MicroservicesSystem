@@ -8,7 +8,7 @@ Service tài khoản của hệ thống DS03. Cung cấp đăng ký Passenger/Dr
 - MySQL với database riêng `user_db`; không truy cập database của service khác.
 - BCrypt qua jBCrypt để lưu và kiểm tra mật khẩu.
 - Spring Security và JWT ký HS256; không dùng HTTP session để ghi nhớ đăng nhập.
-- Thời gian trong bảng `users` lưu theo giờ Việt Nam (UTC+7); response kèm offset `+07:00`.
+- Thời gian trong bảng `users` lưu theo UTC; response kèm offset UTC (`Z` hoặc `+00:00`). JDBC đặt session MySQL và Hibernate dùng UTC. JWT tiếp tục dùng Instant, không đổi cách tính thời hạn.
 
 Service không quản lý xe, chuyến đi hoặc thanh toán. Service sở hữu API nghiệp vụ phải tự xác minh JWT và kiểm tra role, quyền sở hữu tài nguyên.
 
@@ -106,6 +106,7 @@ API lấy userId từ subject của JWT đã xác minh, không lấy từ query/
 | 401 | Thông tin đăng nhập không hợp lệ, tài khoản không khả dụng; token thiếu/sai/hết hạn; password login vượt 72 byte nhưng qua validation ký tự |
 | 403 | Token hợp lệ nhưng không đủ quyền theo quy tắc API |
 | 409 | Email/phone trùng hoặc vi phạm ràng buộc dữ liệu khi đăng ký |
+| 413 | Tổng request body vượt giới hạn cấu hình, mặc định 65536 byte (64 KiB) |
 
 Lỗi ứng dụng được GlobalExceptionHandler chuyển thành ProblemDetail. Lỗi tại filter Spring Security có thể không có JSON body; không yêu cầu mọi lỗi có cùng cấu trúc. Response không công khai SQL, password hoặc hash.
 
@@ -131,6 +132,14 @@ Dùng InnoDB và utf8mb4. Tạo tài khoản `user_app` có quyền SELECT, INSE
 Local dùng `ddl-auto: validate`: thiếu/sai bảng có thể khiến ứng dụng không khởi động. Cấu hình mặc định dùng `ddl-auto: none`: không tự tạo/sửa bảng. Hiện không có migration tự tạo bảng users; người triển khai cần chuẩn bị bảng trước khi dùng API.
 
 ## Chạy local bằng PowerShell
+
+Lệnh ngắn tại thư mục gốc repository:
+
+```powershell
+& ./src/user-service/scripts/run-local.ps1
+```
+
+Script bật profile local, dùng cổng 8081 nếu chưa đặt SERVER_PORT, hỏi mật khẩu MySQL nếu terminal chưa có MYSQL_PASSWORD và tạo khóa JWT nếu chưa có JWT_SECRET. Không ghi secret vào file. Các lần chạy lại trong cùng terminal giữ nguyên cấu hình. Nếu máy chặn script PowerShell, dùng các lệnh thủ công bên dưới thay vì thay đổi chính sách bảo mật toàn máy.
 
 Tại thư mục gốc repository:
 
@@ -177,6 +186,7 @@ $jwtBytes = $null
 | MYSQL_USERNAME | user_app |
 | MYSQL_PASSWORD | Bắt buộc, không có mật khẩu mặc định trong ứng dụng |
 | JWT_SECRET | Bắt buộc: Base64 của ít nhất 32 byte ngẫu nhiên |
+| MAX_REQUEST_BODY_BYTES | 65536 byte (64 KiB), giới hạn toàn bộ request body |
 | JWT_ISSUER | ds03-user-service |
 | JWT_EXPIRES_IN_SECONDS | 3600, phải lớn hơn 0 |
 
@@ -211,17 +221,19 @@ Chạy test không cần MySQL/broker hoặc khóa JWT thật:
 mvn -f src/user-service/pom.xml test
 ```
 
-Bộ test hiện có 18 hàm: mặc định 16 chạy, 2 test MySQL được bỏ qua.
+Bộ test hiện có 24 hàm: mặc định 22 chạy, 2 test MySQL được bỏ qua.
 
 | Test | Nội dung |
 |---|---|
+| UserResponseTest | Thời gian tạo tài khoản và response dùng UTC |
+| RequestSizeLimitFilterTest | Body đúng biên, quá giới hạn, không có Content-Length và số byte UTF-8 |
 | RegisterRequestTest | Trường bắt buộc, định dạng, độ dài, role đăng ký, che password khi toString |
 | UserServiceTest | BCrypt, email chuẩn hóa, phone giữ nguyên, chống trùng, giới hạn UTF-8 và role |
 | AuthControllerTest | Phản hồi đăng ký 201/400/409, validation, không lộ password/SQL |
 | LoginSecurityTest | Email/phone login, sai thông tin, tài khoản khóa, JWT, /users/me, 401/403 |
 | RegistrationDatabaseTest | Lưu MySQL thật; đăng ký đồng thời cùng email chỉ một thành công |
 
-Để chạy đủ 18 test, chuẩn bị MySQL và MYSQL_USERNAME/MYSQL_PASSWORD như hướng dẫn local, rồi bật:
+Để chạy đủ 24 test, chuẩn bị MySQL và MYSQL_USERNAME/MYSQL_PASSWORD như hướng dẫn local, rồi bật:
 
 ```powershell
 $env:USER_DB_TEST = 'true'
@@ -245,3 +257,11 @@ Test database dùng email ngẫu nhiên, tự xóa đúng bản ghi test; không
 | repository | Truy cập users bằng Spring Data JPA |
 | service | Đăng ký, đăng nhập, tạo JWT và đọc tài khoản hiện tại |
 | exception | Xử lý lỗi ứng dụng |
+
+## Chuyển dữ liệu cũ sang UTC
+
+Cấu hình UTC không tự chuyển giá trị DATETIME đã lưu. Bản ghi tạo trước thay đổi này đang theo UTC+7 cần trừ 7 giờ đúng một lần, giữ nguyên thời điểm thực tế. Trước khi chuyển cần dừng service, sao lưu dữ liệu và xác định chính xác tập bản ghi cũ; không cập nhật toàn bộ bảng nếu đã có bản ghi UTC. Không tự chạy chuyển đổi khi ứng dụng khởi động. Dữ liệu cũ chưa được chuyển bởi thay đổi code này. Khi thao tác SQL thủ công, đặt session time_zone = '+00:00' trước khi ghi thời gian.
+
+## Giới hạn request body
+
+RequestSizeLimitFilter chạy trước xác thực JWT trong SecurityFilterChain. Mặc định chấp nhận tối đa 65536 byte, vượt giới hạn trả HTTP 413 với application/problem+json trước khi đến Controller/DB. Filter kiểm tra cả Content-Length lẫn dữ liệu thực đọc được (không quá limit + 1 byte), nên vẫn chặn body không có Content-Length. Request hợp lệ được chuyển tiếp nguyên nội dung cho Spring MVC. Giới hạn tính theo byte, không phải ký tự, không giới hạn kích thước header. Các API hiện dùng đọc body đồng bộ; wrapper không hỗ trợ non-blocking Servlet reads. MAX_REQUEST_BODY_BYTES có thể cấu hình qua môi trường khi chạy local. Mức 64 KiB là lựa chọn V1 của nhóm, không phải con số bắt buộc trong đề.

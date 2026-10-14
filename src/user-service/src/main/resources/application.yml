@@ -1,6 +1,8 @@
 server:
   port: ${SERVER_PORT:8080}
 app:
+  http:
+    max-request-body-bytes: ${MAX_REQUEST_BODY_BYTES:65536}
   jwt:
     secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER:ds03-user-service}
@@ -9,7 +11,7 @@ spring:
   application:
     name: user-service
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/user_db?connectionTimeZone=%2B07:00&forceConnectionTimeZoneToSession=true&sslMode=DISABLED&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/user_db?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&sslMode=DISABLED&allowPublicKeyRetrieval=true
     username: ${MYSQL_USERNAME:user_app}
     password: ${MYSQL_PASSWORD}
     hikari:
@@ -21,7 +23,7 @@ spring:
     properties:
       hibernate:
         jdbc:
-          time_zone: Asia/Ho_Chi_Minh
+          time_zone: UTC
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}

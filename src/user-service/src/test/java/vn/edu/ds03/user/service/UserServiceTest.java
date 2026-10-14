@@ -37,7 +37,7 @@ class UserServiceTest {
             var response = service.register(request(password, role));
             assertEquals("Demo User", response.name());
             assertEquals(role, response.role());
-            assertEquals("+07:00", response.createdAt().getOffset().toString());
+            assertEquals(java.time.ZoneOffset.UTC, response.createdAt().getOffset());
         }
         var users = org.mockito.ArgumentCaptor.forClass(User.class);
         verify(repository, times(2)).saveAndFlush(users.capture());

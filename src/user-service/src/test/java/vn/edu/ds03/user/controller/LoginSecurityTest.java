@@ -105,6 +105,14 @@ class LoginSecurityTest {
     }
 
     @Test
+    void oversizedJsonIsRejectedBeforeAuthenticationOrDatabase() throws Exception {
+        mvc.perform(post("/auth/login").contentType(MediaType.APPLICATION_JSON)
+                .content("{\"identifier\":\"" + "x".repeat(65536) + "\"}"))
+                .andExpect(status().is(413));
+        verifyNoInteractions(repository);
+    }
+
+    @Test
     void wrongPasswordUnknownEmailAndDisabledAccountReturn401() throws Exception {
         for (String[] credentials : new String[][]{{"user@example.com", "wrong-password"}, {"unknown@example.com", PASSWORD},
                 {"0912345678", "wrong-password"}, {"0999999999", PASSWORD}}) {

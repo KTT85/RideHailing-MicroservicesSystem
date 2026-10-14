@@ -1,7 +1,7 @@
 package vn.edu.ds03.user.dto;
 
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import vn.edu.ds03.user.model.User.Role;
 import vn.edu.ds03.user.model.User;
 import vn.edu.ds03.user.model.User.UserStatus;
@@ -18,6 +18,6 @@ public record UserResponse(
     public static UserResponse from(User user) {
         return new UserResponse(user.getId(), user.getName(), user.getEmail(),
                 user.getPhone(), user.getRole(), user.getStatus(),
-                user.getCreatedAt().atZone(ZoneId.of("Asia/Ho_Chi_Minh")).toOffsetDateTime());
+                user.getCreatedAt().atOffset(ZoneOffset.UTC));
     }
 }

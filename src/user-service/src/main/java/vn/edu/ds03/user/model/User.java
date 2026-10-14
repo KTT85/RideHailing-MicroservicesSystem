@@ -2,7 +2,7 @@ package vn.edu.ds03.user.model;
 
 import jakarta.persistence.*;
 import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Entity
@@ -64,7 +64,7 @@ public class User {
             id = UUID.randomUUID().toString();
         }
         if (createdAt == null) {
-            createdAt = LocalDateTime.now(ZoneId.of("Asia/Ho_Chi_Minh"));
+            createdAt = LocalDateTime.now(ZoneOffset.UTC);
         }
     }
 
