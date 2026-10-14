@@ -1,92 +1,33 @@
 # User Service
 
-Service quản lý tài khoản, đăng ký và đăng nhập cho hệ thống DS03.
+Service tài khoản của hệ thống DS03. Cung cấp đăng ký Passenger/Driver, đăng nhập bằng email hoặc số điện thoại, cấp JWT và lấy thông tin tài khoản hiện tại.
 
-## Trạng thái triển khai
+## Công nghệ và phạm vi
 
-Đã triển khai:
+- Java 21, Spring Boot 4.1.1, Spring MVC, Spring Data JPA.
+- MySQL với database riêng `user_db`; không truy cập database của service khác.
+- BCrypt qua jBCrypt để lưu và kiểm tra mật khẩu.
+- Spring Security và JWT ký HS256; không dùng HTTP session để ghi nhớ đăng nhập.
+- Thời gian trong bảng `users` lưu theo giờ Việt Nam (UTC+7); response kèm offset `+07:00`.
 
-- Entity ánh xạ bảng `user_db.users` và DTO.
-- Kết nối MySQL, lưu thời gian theo giờ Việt Nam (UTC+7).
-- API đăng ký PASSENGER/DRIVER.
-- Chuẩn hóa email, kiểm tra số điện thoại và lưu mật khẩu BCrypt.
-- Validation, xử lý lỗi và kiểm thử nghiệp vụ đăng ký.
+Service không quản lý xe, chuyến đi hoặc thanh toán. Service sở hữu API nghiệp vụ phải tự xác minh JWT và kiểm tra role, quyền sở hữu tài nguyên.
 
-Đã thêm đăng nhập, cấp JWT và bảo vệ `GET /users/me` bằng Spring Security. Phân quyền thao tác chuyến/xe thuộc service sở hữu API đó; các service cần thống nhất contract JWT bên dưới.
+## API
 
-## Yêu cầu môi trường
+Base URL khi chạy local hoặc truy cập từ máy host qua Compose: `http://localhost:8081`.
 
-- Java 21 trở lên, Maven 3.9 trở lên.
-- MySQL truy cập được tại `localhost:3306` hoặc địa chỉ cấu hình.
-- Có database `user_db` và bảng `users` với các cột: `id`, `name`, `email`, `phone`, `password_hash`, `role`, `status`, `created_at`.
-- Email và phone có ràng buộc UNIQUE; id là CHAR(36), created_at là DATETIME(6).
-- Tài khoản MySQL `user_app` có quyền SELECT, INSERT, UPDATE, DELETE trên `user_db`.
+| Method | Endpoint | Quyền truy cập | Kết quả thành công |
+|---|---|---|---|
+| POST | `/auth/register` | Công khai | 201, thông tin tài khoản |
+| POST | `/auth/login` | Công khai | 200, JWT và thông tin tài khoản |
+| GET | `/users/me` | Bearer JWT hợp lệ, role được hỗ trợ | 200, tài khoản của người gọi |
+| GET | `/actuator/health` | Công khai | 200 khi health là UP |
 
-Không đưa mật khẩu database hoặc khóa bí mật vào repository.
+Các request không khớp quy tắc trong SecurityConfig mặc định bị chặn. API công khai nên gọi với Authorization = No Auth, không gửi token cũ hoặc không hợp lệ.
 
-## Chạy trên máy cá nhân
+### Đăng ký
 
-Tại thư mục gốc repository, mở PowerShell:
-
-```powershell
-$env:SPRING_PROFILES_ACTIVE = 'local'
-$env:MYSQL_USERNAME = 'user_app'
-$dbCredential = Get-Credential -UserName 'user_app' -Message 'Nhập mật khẩu MySQL'
-$env:MYSQL_PASSWORD = $dbCredential.GetNetworkCredential().Password
-# Tạo khóa cho phiên local; không in hoặc commit khóa.
-if (-not $env:JWT_SECRET) {
-    $jwtBytes = New-Object byte[] 32
-    [System.Security.Cryptography.RandomNumberGenerator]::Fill($jwtBytes)
-    $env:JWT_SECRET = [Convert]::ToBase64String($jwtBytes)
-}
-mvn -f src/user-service/pom.xml spring-boot:run
-```
-
-Các biến cấu hình:
-
-| Biến | Mặc định / yêu cầu |
-|---|---|
-| `SPRING_PROFILES_ACTIVE` | Đặt `local` khi chạy trên máy cá nhân |
-| `SERVER_PORT` | `8081` với profile local |
-| `MYSQL_HOST` | `localhost` |
-| `MYSQL_PORT` | `3306` |
-| `MYSQL_USERNAME` | `user_app` |
-| `MYSQL_PASSWORD` | Bắt buộc cung cấp qua môi trường |
-| `JWT_SECRET` | Base64 của ít nhất 32 byte ngẫu nhiên; bắt buộc |
-| `JWT_ISSUER` | `ds03-user-service` |
-| `JWT_EXPIRES_IN_SECONDS` | `3600` (1 giờ) |
-
-Profile local kiểm tra cấu trúc bảng bằng `ddl-auto: validate`, không tự tạo hoặc sửa bảng. Health check RabbitMQ được tắt trong profile này vì giai đoạn đăng ký chưa dùng messaging. Maven không tự đọc `.env`.
-
-Mở terminal khác để kiểm tra:
-
-```powershell
-Invoke-RestMethod http://localhost:8081/actuator/health
-```
-
-Kết quả mong đợi: `status` là `UP`.
-
-Dừng ứng dụng bằng Ctrl+C, sau đó xóa mật khẩu khỏi môi trường terminal:
-
-```powershell
-Remove-Item Env:MYSQL_PASSWORD -ErrorAction SilentlyContinue
-$dbCredential = $null
-```
-
-## Chạy bằng Docker Compose
-
-Dùng hướng dẫn và `.env.example` trong README gốc repository. Không bật profile local trong Docker.
-
-Trước khi chạy Compose, tạo JWT_SECRET như ví dụ local và giữ trong môi trường, hoặc lưu vào `.env` đã được Git ignore. `.env.example` để trống giá trị này. CI tự tạo khóa tạm khi chạy. Thay khóa làm các JWT đã cấp bằng khóa cũ không còn hợp lệ.
-
-- Cổng HTTP trong container: `8080`.
-- Cổng truy cập từ máy host: `8081`.
-- MySQL được tìm qua DNS nội bộ `mysql`; thông tin kết nối do Compose truyền vào.
-- Cấu hình mặc định `ddl-auto: none` yêu cầu chuẩn bị bảng trước khi dùng API.
-
-## API đăng ký
-
-`POST /auth/register`, Content-Type: `application/json`.
+POST `/auth/register`, Content-Type: `application/json`.
 
 ```json
 {
@@ -98,52 +39,189 @@ Trước khi chạy Compose, tạo JWT_SECRET như ví dụ local và giữ tron
 }
 ```
 
-Khi chạy local, URL đầy đủ là `http://localhost:8081/auth/register`. Thay giá trị placeholder mật khẩu trước khi gửi request.
+Thay placeholder bằng mật khẩu tự chọn trước khi gửi. Quy tắc dữ liệu:
 
-Quy tắc:
+- `name`: bắt buộc, không chỉ có khoảng trắng, tối đa 100 ký tự; bỏ khoảng trắng đầu/cuối khi lưu.
+- `email`: bắt buộc, đúng định dạng, tối đa 254 ký tự; chuẩn hóa chữ thường khi lưu.
+- `phone`: đúng 10 chữ số, bắt đầu bằng `0`; giữ nguyên định dạng khi lưu.
+- `password`: không rỗng, từ 8 đến 72 ký tự và không vượt 72 byte UTF-8; không trim, lưu bằng BCrypt với salt ngẫu nhiên.
+- `role`: chỉ cho đăng ký `PASSENGER` hoặc `DRIVER`.
+- Email và phone không được trùng tài khoản đã có; database bảo vệ bằng UNIQUE.
+- UUID và thời gian tạo do ứng dụng sinh, status mặc định `ACTIVE`.
 
-- Name bắt buộc, tối đa 100 ký tự.
-- Email hợp lệ, tối đa 254 ký tự; service chuẩn hóa chữ thường.
-- Phone phải gồm 10 chữ số, bắt đầu bằng `0`; lưu nguyên định dạng này.
-- Password từ 8 ký tự, không vượt 72 byte UTF-8; không được lưu nguyên văn.
-- Role đăng ký chỉ là `PASSENGER` hoặc `DRIVER`.
-- Tài khoản mới có status `ACTIVE`; UUID và created_at do ứng dụng tạo.
-- Response chứa thông tin tài khoản, không chứa password/password_hash. Thời gian trả về kèm offset `+07:00`.
+Thành công trả UserResponse gồm `id`, `name`, `email`, `phone`, `role`, `status`, `createdAt`. Không trả password/password_hash và không cấp JWT ở bước đăng ký.
 
-| HTTP status | Ý nghĩa |
+### Đăng nhập bằng email hoặc số điện thoại
+
+POST `/auth/login`, Content-Type: `application/json`.
+
+Bằng email:
+
+```json
+{
+  "identifier": "user@example.com",
+  "password": "<MAT_KHAU_CUA_TAI_KHOAN>"
+}
+```
+
+Bằng số điện thoại:
+
+```json
+{
+  "identifier": "0912345678",
+  "password": "<MAT_KHAU_CUA_TAI_KHOAN>"
+}
+```
+
+`identifier` bắt buộc, tối đa 254 ký tự: email dạng `user@example.com` hoặc phone như quy tắc đăng ký. Không nhận phone có mã quốc gia. Trường login là `identifier`, không phải `email`/`phone`. Email được chuyển chữ thường trước khi tìm kiếm; password được giữ nguyên.
+
+Service tìm tài khoản theo email/phone, kiểm tra BCrypt và status ACTIVE, sau đó cấp JWT. Không tìm thấy tài khoản thì từ chối ngay. Đăng nhập không áp dụng min 8 ký tự để hỗ trợ tài khoản đã tồn tại, nhưng vẫn yêu cầu password không rỗng, tối đa 72 ký tự và 72 byte UTF-8.
+
+Response 200 gồm:
+
+- `accessToken`: JWT vừa được cấp.
+- `tokenType`: `Bearer`.
+- `expiresIn`: thời gian hiệu lực tính bằng giây, mặc định 3600.
+- `user`: UserResponse, không chứa password/hash.
+
+Không tìm thấy email/phone, sai mật khẩu hoặc tài khoản DISABLED đều trả 401 với cùng thông báo.
+
+### Thông tin tài khoản hiện tại
+
+GET `/users/me`, không cần request body:
+
+```http
+Authorization: Bearer <accessToken>
+```
+
+Trong Postman chọn Authorization → Bearer Token, dán giá trị accessToken, không thêm dấu ngoặc kép hoặc tiền tố Bearer vào ô Token.
+
+API lấy userId từ subject của JWT đã xác minh, không lấy từ query/body của client. Sau đó đọc tài khoản trong DB và kiểm tra lại ACTIVE. Tài khoản bị xóa hoặc DISABLED bị từ chối dù token còn hạn.
+
+### Mã phản hồi lỗi
+
+| HTTP status | Trường hợp |
 |---|---|
-| `201` | Đã tạo tài khoản |
-| `400` | JSON hoặc dữ liệu đầu vào không hợp lệ |
-| `409` | Email/phone trùng hoặc vi phạm ràng buộc dữ liệu |
+| 400 | Validation/JSON sai; đăng ký vượt giới hạn 72 byte UTF-8 |
+| 401 | Thông tin đăng nhập không hợp lệ, tài khoản không khả dụng; token thiếu/sai/hết hạn; password login vượt 72 byte nhưng qua validation ký tự |
+| 403 | Token hợp lệ nhưng không đủ quyền theo quy tắc API |
+| 409 | Email/phone trùng hoặc vi phạm ràng buộc dữ liệu khi đăng ký |
 
-Ràng buộc UNIQUE trong database bảo vệ trước các request đồng thời; kiểm tra tồn tại trong service giúp trả thông báo rõ ràng.
+Lỗi ứng dụng được GlobalExceptionHandler chuyển thành ProblemDetail. Lỗi tại filter Spring Security có thể không có JSON body; không yêu cầu mọi lỗi có cùng cấu trúc. Response không công khai SQL, password hoặc hash.
 
-## Cấu trúc code
+## Chuẩn bị database
 
-| Thư mục | Trách nhiệm |
+Cần Maven 3.9 trở lên và MySQL chạy được. Phiên bản MySQL nhóm chọn cho Compose là 8.4.
+
+Chuẩn bị `user_db` với bảng `users` có các cột:
+
+| Cột | Kiểu / ràng buộc |
 |---|---|
-| `model` | Entity User và enum trong User.java |
-| `dto` | Dữ liệu request/response, validation |
-| `repository` | Truy vấn và lưu tài khoản bằng Spring Data JPA |
-| `service` | Nghiệp vụ đăng ký, chuẩn hóa và BCrypt |
-| `controller` | HTTP endpoint |
-| `exception` | Chuyển lỗi thành response ProblemDetail |
+| id | CHAR(36), PRIMARY KEY |
+| name | VARCHAR(100), NOT NULL |
+| email | VARCHAR(254), NOT NULL, UNIQUE |
+| phone | VARCHAR(20), NOT NULL, UNIQUE |
+| password_hash | VARCHAR(255), NOT NULL |
+| role | VARCHAR(16), NOT NULL |
+| status | VARCHAR(16), NOT NULL, DEFAULT 'ACTIVE' |
+| created_at | DATETIME(6), NOT NULL |
+
+Dùng InnoDB và utf8mb4. Tạo tài khoản `user_app` có quyền SELECT, INSERT, UPDATE, DELETE chỉ trên `user_db`. Root dành cho quản trị/khởi tạo. Không lưu mật khẩu thật trong SQL được commit.
+
+Local dùng `ddl-auto: validate`: thiếu/sai bảng có thể khiến ứng dụng không khởi động. Cấu hình mặc định dùng `ddl-auto: none`: không tự tạo/sửa bảng. Hiện không có migration tự tạo bảng users; người triển khai cần chuẩn bị bảng trước khi dùng API.
+
+## Chạy local bằng PowerShell
+
+Tại thư mục gốc repository:
+
+```powershell
+$env:SPRING_PROFILES_ACTIVE = 'local'
+$env:SERVER_PORT = '8081'
+$env:MYSQL_USERNAME = 'user_app'
+$dbCredential = Get-Credential -UserName 'user_app' -Message 'Nhap mat khau MySQL'
+$env:MYSQL_PASSWORD = $dbCredential.GetNetworkCredential().Password
+if (-not $env:JWT_SECRET) {
+    $jwtBytes = New-Object byte[] 32
+    $jwtRandom = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $jwtRandom.GetBytes($jwtBytes) } finally { $jwtRandom.Dispose() }
+    $env:JWT_SECRET = [Convert]::ToBase64String($jwtBytes)
+}
+
+mvn -f src/user-service/pom.xml spring-boot:run
+```
+
+Giữ terminal chạy. Ở terminal khác:
+
+```powershell
+Invoke-RestMethod http://localhost:8081/actuator/health
+```
+
+Mong đợi `status: UP`. Profile local tắt RabbitMQ health check; không cần broker cho các API User hiện tại. Maven không tự nạp `.env`; chạy trực tiếp cần biến môi trường trong chính terminal chạy Maven.
+
+Dừng bằng Ctrl+C. Trong cùng terminal, các lần chạy sau chỉ cần lệnh Maven. Để kết thúc phiên và xóa secret khỏi môi trường:
+
+```powershell
+Remove-Item Env:MYSQL_PASSWORD, Env:JWT_SECRET -ErrorAction SilentlyContinue
+$dbCredential = $null
+$jwtBytes = $null
+```
+
+### Biến môi trường
+
+| Biến | Mặc định / ý nghĩa |
+|---|---|
+| SPRING_PROFILES_ACTIVE | Dùng `local` khi chạy Java ngoài Docker |
+| SERVER_PORT | Local: 8081; cấu hình gốc trong container: 8080 |
+| MYSQL_HOST | localhost |
+| MYSQL_PORT | 3306 |
+| MYSQL_USERNAME | user_app |
+| MYSQL_PASSWORD | Bắt buộc, không có mật khẩu mặc định trong ứng dụng |
+| JWT_SECRET | Bắt buộc: Base64 của ít nhất 32 byte ngẫu nhiên |
+| JWT_ISSUER | ds03-user-service |
+| JWT_EXPIRES_IN_SECONDS | 3600, phải lớn hơn 0 |
+
+Cấu hình gốc dùng thêm RABBITMQ_HOST/PORT/USER/PASSWORD; Compose truyền các giá trị này. Local có giá trị dự phòng cho tài khoản broker và tắt health broker.
+
+## Docker Compose và CI
+
+Xem hướng dẫn chung tại [README gốc](../../README.md). Copy `.env.example` thành `.env` nếu chưa có và cấu hình các biến cần thiết. JWT_SECRET phải được cung cấp qua môi trường hoặc `.env` đã được Git ignore; giá trị trong `.env.example` để trống. Có thể tạo khóa bằng đoạn PowerShell ở trên mà không bật profile local trong container.
+
+- Host gọi cổng 8081, container lắng nghe 8080.
+- User Service kết nối MySQL qua DNS nội bộ `mysql`, không qua MySQL local trên host.
+- Bảng users trong MySQL local không tự xuất hiện trong MySQL Docker; cần chuẩn bị schema riêng.
+- CI tạo khóa JWT ngẫu nhiên tạm thời cho job Compose; test tự tạo khóa riêng.
+
+Không commit `.env`, khóa JWT, mật khẩu thật hoặc token còn hiệu lực. Thay JWT_SECRET làm token ký bằng khóa cũ không còn xác minh được.
+
+## JWT và tích hợp
+
+JWT dùng chữ ký HS256, gồm `iss`, `sub` (userId), `userId`, `role`, `iat`, `exp`, `jti`. Mỗi lần đăng nhập thành công cấp token mới. Payload không chứa password, email hoặc phone; JWT được ký, không mã hóa nội dung.
+
+Các service tích hợp cần thống nhất JWT_SECRET và JWT_ISSUER, xác minh chữ ký/thời hạn, đọc role và kiểm tra quyền sở hữu tài nguyên. Với HS256, service có khóa xác minh cũng có khả năng ký token; chỉ chia sẻ khóa trong môi trường service tin cậy.
+
+Hiện chưa có refresh token, logout/thu hồi token hoặc đồng bộ trạng thái khóa tài khoản sang service khác. Token cũ có thể cùng tồn tại đến khi hết hạn. Việc kiểm tra DISABLED trong /users/me không tự vô hiệu hóa token tại các service khác. Decoder có dung sai đồng hồ mặc định nên kiểm thử hết hạn nên dùng bộ test tự động.
+
+Nguồn tham khảo: [Spring Security JWT](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html).
 
 ## Kiểm thử
+
+Chạy test không cần MySQL/broker hoặc khóa JWT thật:
 
 ```powershell
 mvn -f src/user-service/pom.xml test
 ```
 
-Các kiểm thử bao gồm:
+Bộ test hiện có 18 hàm: mặc định 16 chạy, 2 test MySQL được bỏ qua.
 
-Bộ test đăng ký được gộp thành 12 hàm: 4 DTO, 4 Service, 2 Controller và 2 MySQL. Thêm 6 hàm LoginSecurityTest kiểm tra đăng nhập và JWT với filter Spring Security thật. Chạy mặc định 16 test và bỏ qua 2 test MySQL; bật USER_DB_TEST để chạy đủ 18.
+| Test | Nội dung |
+|---|---|
+| RegisterRequestTest | Trường bắt buộc, định dạng, độ dài, role đăng ký, che password khi toString |
+| UserServiceTest | BCrypt, email chuẩn hóa, phone giữ nguyên, chống trùng, giới hạn UTF-8 và role |
+| AuthControllerTest | Phản hồi đăng ký 201/400/409, validation, không lộ password/SQL |
+| LoginSecurityTest | Email/phone login, sai thông tin, tài khoản khóa, JWT, /users/me, 401/403 |
+| RegistrationDatabaseTest | Lưu MySQL thật; đăng ký đồng thời cùng email chỉ một thành công |
 
-- DTO: mọi trường bắt buộc, định dạng và giới hạn độ dài, role đăng ký, không lộ password qua toString.
-- Service: BCrypt, chuẩn hóa email, giữ nguyên phone, role, email/phone trùng, giới hạn 72 byte và lỗi ràng buộc DB.
-- Controller và handler qua MockMvc: HTTP 201/400/409, validation trước khi gọi service, JSON sai và response không chứa password/chi tiết SQL.
-
-Test MySQL thật mặc định không chạy. Khi đã đặt MYSQL_USERNAME và MYSQL_PASSWORD như hướng dẫn kết nối, bật riêng:
+Để chạy đủ 18 test, chuẩn bị MySQL và MYSQL_USERNAME/MYSQL_PASSWORD như hướng dẫn local, rồi bật:
 
 ```powershell
 $env:USER_DB_TEST = 'true'
@@ -154,22 +232,16 @@ try {
 }
 ```
 
-RegistrationDatabaseTest kiểm tra lưu dữ liệu thật và hai luồng cùng đăng ký một email (chỉ một thành công). Test tạo email ngẫu nhiên, xóa đúng tài khoản test sau khi chạy, không sửa tài khoản mẫu. Không bật trên DB production. MockMvc mô phỏng HTTP trong JVM; không phải test mạng ngoài process. Test JWT tự tạo khóa ngẫu nhiên, không cần secret thật.
+Test database dùng email ngẫu nhiên, tự xóa đúng bản ghi test; không sửa tài khoản mẫu. Chỉ bật trên DB phát triển/test. MockMvc dùng HTTP giả lập trong JVM với filter Security thật; không thay thế toàn bộ kiểm thử mạng và liên service.
 
-## Đăng nhập và thông tin tài khoản
+## Cấu trúc mã nguồn
 
-POST `http://localhost:8081/auth/login`:
-
-```json
-{"identifier":"user@example.com","password":"<MAT_KHAU_CUA_TAI_KHOAN>"}
-```
-
-Trường identifier nhận email hoặc số điện thoại 10 chữ số bắt đầu bằng 0. Ví dụ đăng nhập bằng số: `{"identifier":"0912345678","password":"<MAT_KHAU_CUA_TAI_KHOAN>"}`. Request cũ dùng trường email cần đổi sang identifier; API đăng ký vẫn giữ email và phone riêng.
-
-Thành công trả 200 với accessToken, tokenType `Bearer`, expiresIn (giây) và user không chứa password/hash. Không tìm thấy email/phone, sai mật khẩu hoặc tài khoản DISABLED trả 401 với cùng thông báo. Định dạng identifier sai trả 400. Login không áp dụng min 8 ký tự để tài khoản mẫu cũ vẫn đăng nhập được; đăng ký mới vẫn yêu cầu min 8. Không tự cấp token khi register.
-
-GET `http://localhost:8081/users/me`, header `Authorization: Bearer <accessToken>`. Postman: Authorization → Bearer Token → dán token từ login. API chỉ trả tài khoản theo subject của token, không nhận userId của người khác từ client; kiểm tra lại ACTIVE trong DB. Thiếu/sai/hết hạn token trả 401; token có role ngoài danh sách hỗ trợ trả 403.
-
-Contract JWT: chữ ký HS256, issuer ds03-user-service, subject = userId, claims userId/role, iat/exp/jti. Payload không chứa mật khẩu/email/phone. JWT được ký, không mã hóa. Các service cần cùng cấu hình khóa/issuer, kiểm tra chữ ký/thời hạn và kiểm soát quyền cùng quyền sở hữu tài nguyên tại API của mình. Không có refresh token, logout/revocation hay đồng bộ trạng thái DISABLED sang service khác; token tại service khác có thể còn hiệu lực đến exp. HS256 phù hợp V1 với các service tin cậy; service giữ khóa xác minh cũng có khả năng ký token.
-
-Các API bảo mật khác mặc định bị chặn; /auth/register, /auth/login và GET /actuator/health được phép gọi công khai. Không dùng session cookie. Nguồn triển khai: [Spring Security JWT](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html).
+| Thư mục | Trách nhiệm |
+|---|---|
+| config | Khóa/encoder/decoder JWT và quy tắc Spring Security |
+| controller | Nhận request, trả response |
+| dto | Request/response và validation |
+| model | Entity User và enum nội bộ |
+| repository | Truy cập users bằng Spring Data JPA |
+| service | Đăng ký, đăng nhập, tạo JWT và đọc tài khoản hiện tại |
+| exception | Xử lý lỗi ứng dụng |
