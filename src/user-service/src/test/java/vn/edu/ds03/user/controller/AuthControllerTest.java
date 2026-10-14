@@ -19,6 +19,7 @@ import vn.edu.ds03.user.dto.UserResponse;
 import vn.edu.ds03.user.exception.GlobalExceptionHandler;
 import vn.edu.ds03.user.model.User;
 import vn.edu.ds03.user.service.UserService;
+import vn.edu.ds03.user.service.AuthService;
 
 class AuthControllerTest {
     private final UserService service = mock(UserService.class);
@@ -33,7 +34,7 @@ class AuthControllerTest {
     void setup() {
         validator = new LocalValidatorFactoryBean();
         validator.afterPropertiesSet();
-        mvc = MockMvcBuilders.standaloneSetup(new AuthController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new AuthController(service, mock(AuthService.class)))
                 .setControllerAdvice(new GlobalExceptionHandler()).setValidator(validator).build();
     }
 

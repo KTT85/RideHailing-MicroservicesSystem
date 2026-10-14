@@ -9,6 +9,8 @@ import org.mindrot.jbcrypt.BCrypt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
 import vn.edu.ds03.user.dto.RegisterRequest;
 import vn.edu.ds03.user.model.User.Role;
 import vn.edu.ds03.user.repository.UserRepository;
@@ -18,6 +20,13 @@ import vn.edu.ds03.user.repository.UserRepository;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE,
         properties = {"spring.profiles.active=local"})
 class RegistrationDatabaseTest {
+    @DynamicPropertySource
+    static void jwtSecret(DynamicPropertyRegistry registry) {
+        byte[] key = new byte[32];
+        new java.security.SecureRandom().nextBytes(key);
+        String secret = java.util.Base64.getEncoder().encodeToString(key);
+        registry.add("app.jwt.secret", () -> secret);
+    }
     @Autowired private UserService service;
     @Autowired private UserRepository repository;
     @Autowired private JdbcTemplate jdbc;
