@@ -48,6 +48,7 @@ services:
     build: ./src/driver-service
     ports: ["127.0.0.1:8082:8080"]
     environment:
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET to a Base64 random key of at least 32 bytes}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}

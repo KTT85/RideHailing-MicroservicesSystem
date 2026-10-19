@@ -1,5 +1,9 @@
 server:
   port: ${SERVER_PORT:8080}
+app:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: ${JWT_ISSUER:ds03-user-service}
 spring:
   application:
     name: driver-service
