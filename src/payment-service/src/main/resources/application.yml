@@ -18,6 +18,15 @@ spring:
         jdbc:
           time_zone: UTC
   rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: auto
+        prefetch: 1
+        default-requeue-rejected: false
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER}
@@ -30,3 +39,13 @@ management:
   endpoint:
     health:
       show-details: never
+app:
+  payment:
+    max-attempts: ${PAYMENT_MAX_ATTEMPTS:5}
+    retry-seconds: ${PAYMENT_RETRY_SECONDS:5}
+    worker-delay-ms: ${PAYMENT_WORKER_DELAY_MS:1000}
+    max-message-bytes: 65536
+    simulator:
+      pay: ${PAYMENT_SIMULATOR_PAY:SUCCESS}
+      refund: ${PAYMENT_SIMULATOR_REFUND:SUCCESS}
+      transient-attempts: ${PAYMENT_SIMULATOR_TRANSIENT_ATTEMPTS:0}
