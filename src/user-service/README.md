@@ -1,5 +1,7 @@
 # User Service
 
+Chạy container cùng Payment và kiểm tra JWT liên service: [DOCKER.md](DOCKER.md).
+
 Service tài khoản của hệ thống DS03. Cung cấp đăng ký Passenger/Driver, đăng nhập bằng email hoặc số điện thoại, cấp JWT và lấy thông tin tài khoản hiện tại.
 
 ## Công nghệ và phạm vi
@@ -198,7 +200,8 @@ Xem hướng dẫn chung tại [README gốc](../../README.md). Copy `.env.examp
 
 - Host gọi cổng 8081, container lắng nghe 8080.
 - User Service kết nối MySQL qua DNS nội bộ `mysql`, không qua MySQL local trên host.
-- Bảng users trong MySQL local không tự xuất hiện trong MySQL Docker; cần chuẩn bị schema riêng.
+- Bảng users trong MySQL local không tự xuất hiện trong MySQL Docker. Flyway tự áp dụng `db/migration/V1__users.sql` để tạo bảng trên database mới; Hibernate không tự tạo bảng.
+- Với database đã có bảng, Flyway baseline ở version 0 rồi áp dụng V1. `CREATE TABLE IF NOT EXISTS` giữ nguyên bảng và dữ liệu cũ; bảng hiện có phải có đủ cột và UNIQUE email/phone như entity. Migration này không tự sửa schema cũ hoặc chuyển thời gian cũ sang UTC.
 - CI tạo khóa JWT ngẫu nhiên tạm thời cho job Compose; test tự tạo khóa riêng.
 
 Không commit `.env`, khóa JWT, mật khẩu thật hoặc token còn hiệu lực. Thay JWT_SECRET làm token ký bằng khóa cũ không còn xác minh được.
@@ -214,6 +217,21 @@ Hiện chưa có refresh token, logout/thu hồi token hoặc đồng bộ trạ
 Nguồn tham khảo: [Spring Security JWT](https://docs.spring.io/spring-security/reference/servlet/oauth2/resource-server/jwt.html).
 
 ## Kiểm thử
+
+Đã đối chiếu code User với `origin/develop`: code nghiệp vụ trước bước chuẩn bị
+Docker khớp bản đã merge. Phần bổ sung mới là Flyway/migration tạo schema trên
+database mới và truyền JWT_ISSUER/SERVER_PORT rõ ràng trong Compose; chưa cần
+commit lại toàn bộ code User từ nhánh Payment.
+
+Kiểm chứng ngày 31/10/2026: `mvn verify` đạt 22 test mặc định (2 test database
+được bỏ qua ở lượt này). Chạy riêng `RegistrationDatabaseTest` với Java 21 trong
+Maven container kết nối MySQL Docker 8.4.13, database riêng `user_test`, đạt thêm
+2/2 test. Flyway áp dụng V1 trên database trống, Hibernate validate schema thành
+công; test đăng ký đồng thời cùng email xác nhận chỉ một tài khoản được tạo.
+Sau bước chuẩn bị, đã build/chạy image User bằng Java 21 và kiểm tra JWT liên
+service qua HTTP thật: đăng nhập và /users/me đạt; JWT User gọi Payment đúng quyền,
+Passenger khác và Driver bị từ chối. Xem [kết quả Docker](DOCKER.md).
+Mật khẩu test được lưu trong `.local/` được Git ignore.
 
 Chạy test không cần MySQL/broker hoặc khóa JWT thật:
 
