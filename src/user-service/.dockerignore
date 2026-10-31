@@ -1,3 +1,8 @@
 target/
 .git/
 .env
+.env.*
+docs/
+tests/
+scripts/
+README.md

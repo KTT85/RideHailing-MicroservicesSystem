@@ -24,6 +24,8 @@ jobs:
       - run: cp .env.example .env
       - name: Generate temporary JWT key for CI
         run: echo "JWT_SECRET=$(openssl rand -base64 32)" >> .env
+      - name: Generate temporary Payment service credential for CI
+        run: echo "PAYMENT_INTERNAL_TOKEN=$(openssl rand -hex 32)" >> .env
       - run: docker compose config --quiet
       - run: docker compose up -d --build
       - name: Check database ownership boundaries
