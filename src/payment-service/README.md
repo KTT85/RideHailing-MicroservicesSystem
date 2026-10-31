@@ -1,5 +1,7 @@
 # Payment Service — DS03
 
+Chạy container và demo MySQL + RabbitMQ thật: xem [DOCKER.md](docs/DOCKER.md).
+
 Thanh toán mô phỏng của hệ thống đặt xe. Java 21+, Spring Boot 4.1.1,
 Spring Data JPA, MySQL, RabbitMQ, Spring Security JWT.
 
