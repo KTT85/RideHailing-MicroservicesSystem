@@ -3,8 +3,11 @@ server:
 spring:
   application:
     name: payment-service
+  flyway:
+    baseline-on-migrate: true
+    baseline-version: 0
   datasource:
-    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/payment_db?connectionTimeZone=UTC&sslMode=DISABLED&allowPublicKeyRetrieval=true
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/payment_db?connectionTimeZone=UTC&forceConnectionTimeZoneToSession=true&sslMode=DISABLED&allowPublicKeyRetrieval=true
     username: ${MYSQL_USERNAME:payment_app}
     password: ${MYSQL_PASSWORD}
     hikari:
@@ -17,6 +20,8 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+        type:
+          java_time_use_direct_jdbc: true
   rabbitmq:
     publisher-confirm-type: correlated
     publisher-returns: true
@@ -40,6 +45,10 @@ management:
     health:
       show-details: never
 app:
+  jwt:
+    secret: ${JWT_SECRET}
+    issuer: ${JWT_ISSUER:ds03-user-service}
+  internal-token: ${PAYMENT_INTERNAL_TOKEN}
   payment:
     max-attempts: ${PAYMENT_MAX_ATTEMPTS:5}
     retry-seconds: ${PAYMENT_RETRY_SECONDS:5}
