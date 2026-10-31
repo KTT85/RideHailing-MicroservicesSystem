@@ -85,7 +85,9 @@ public class PaymentService {
             """, String.class, operationId);
         if (trips.isEmpty()) return;
         Payment p = payments.lockByTripId(trips.getFirst()).orElseThrow();
-        PaymentOperation op = operations.findById(operationId).orElseThrow();
+        // Locking reads see the latest committed state under MySQL REPEATABLE READ.
+        // A plain findById could reuse the snapshot taken before waiting for the payment lock.
+        PaymentOperation op = operations.lockById(operationId).orElseThrow();
         if (!"PENDING".equals(op.getStatus()) || (op.getNextRetryAt() != null && op.getNextRetryAt().isAfter(now()))) return;
         op.setAttemptCount(op.getAttemptCount() + 1);
         if ("REFUND".equals(op.getOperationType())) {
