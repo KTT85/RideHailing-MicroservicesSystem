@@ -1,0 +1,26 @@
+{
+  "source": "User-provided terminal screenshots; values transcribed; raw screenshots excluded because they contain a local service credential",
+  "environment": "Local Payment with MySQL and RabbitMQ, as run by user",
+  "runs": [
+    {
+      "completed": 10,
+      "remaining": 0,
+      "count": 10,
+      "enqueueSeconds": 2.184,
+      "completedPerSecond": 2.82,
+      "completionSeconds": 3.547,
+      "publishP95Milliseconds": 2089.54,
+      "timestampUtc": "2026-10-16T03:59:40.7876626Z"
+    },
+    {
+      "completed": 100,
+      "remaining": 0,
+      "count": 100,
+      "enqueueSeconds": 0.95,
+      "completedPerSecond": 30.81,
+      "completionSeconds": 3.246,
+      "publishP95Milliseconds": 15.82,
+      "timestampUtc": "2026-10-16T04:00:09.5084887Z"
+    }
+  ]
+}

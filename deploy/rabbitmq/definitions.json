@@ -1,0 +1,21 @@
+{
+  "vhosts": [{"name": "/"}],
+  "exchanges": [
+    {"name":"ride.events","vhost":"/","type":"topic","durable":true,"auto_delete":false,"internal":false,"arguments":{}},
+    {"name":"payment.delivery","vhost":"/","type":"direct","durable":true,"auto_delete":false,"internal":false,"arguments":{}}
+  ],
+  "queues": [
+    {"name":"payment.commands","vhost":"/","durable":true,"auto_delete":false,"arguments":{"x-dead-letter-exchange":"payment.delivery","x-dead-letter-routing-key":"payment.dlq"}},
+    {"name":"payment.retry","vhost":"/","durable":true,"auto_delete":false,"arguments":{"x-message-ttl":5000,"x-dead-letter-exchange":"payment.delivery","x-dead-letter-routing-key":"payment.commands"}},
+    {"name":"payment.dlq","vhost":"/","durable":true,"auto_delete":false,"arguments":{}}
+  ],
+  "bindings": [
+    {"source":"ride.events","vhost":"/","destination":"payment.commands","destination_type":"queue","routing_key":"PaymentRequested","arguments":{}},
+    {"source":"ride.events","vhost":"/","destination":"payment.commands","destination_type":"queue","routing_key":"PaymentRefundRequested","arguments":{}},
+    {"source":"ride.events","vhost":"/","destination":"payment.commands","destination_type":"queue","routing_key":"CashPaymentConfirmationRequested","arguments":{}},
+    {"source":"ride.events","vhost":"/","destination":"payment.commands","destination_type":"queue","routing_key":"TripCompleted","arguments":{}},
+    {"source":"payment.delivery","vhost":"/","destination":"payment.commands","destination_type":"queue","routing_key":"payment.commands","arguments":{}},
+    {"source":"payment.delivery","vhost":"/","destination":"payment.retry","destination_type":"queue","routing_key":"payment.retry","arguments":{}},
+    {"source":"payment.delivery","vhost":"/","destination":"payment.dlq","destination_type":"queue","routing_key":"payment.dlq","arguments":{}}
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "recordedDate": "2026-10-16",
+  "scope": "Existing local reports only; no tests rerun for evidence collection",
+  "reports": [
+    {
+      "suite": "vn.edu.ds03.payment.integration.PaymentIntegrationTest",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "reportModified": "2026-10-16T10:58:23.2072238+07:00"
+    }
+  ]
+}
