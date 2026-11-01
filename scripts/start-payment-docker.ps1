@@ -1,5 +1,7 @@
 param(
-    [ValidateSet('Up', 'Status', 'Down', 'Config')][string]$Action = 'Up'
+    [ValidateSet('Up', 'Status', 'Down', 'Config')][string]$Action = 'Up',
+    [switch]$WithUser,
+    [switch]$UserOnly
 )
 $ErrorActionPreference = 'Stop'
 $repoRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..'))
@@ -50,7 +52,12 @@ try {
     & $dockerExe @composeArgs config --quiet
     if ($LASTEXITCODE -ne 0) { throw 'Invalid Compose configuration.' }
     switch ($Action) {
-        'Up' { & $dockerExe @composeArgs up -d --build --wait --wait-timeout 300 payment-service }
+        'Up' {
+            $services = @('payment-service')
+            if ($UserOnly) { $services = @('user-service') }
+            elseif ($WithUser) { $services += 'user-service' }
+            & $dockerExe @composeArgs up -d --build --wait --wait-timeout 300 @services
+        }
         'Status' { & $dockerExe @composeArgs ps }
         'Down' { & $dockerExe @composeArgs down }
         'Config' { Write-Host 'Compose configuration is valid.' }

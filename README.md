@@ -4,6 +4,12 @@ Khung dự án bài tập lớn cho 3 thành viên. Đây là skeleton chạy đ
 
 ## Phân công
 
+Xem [kế hoạch triển khai](ke_hoach.md), đặc biệt **mục 14**: chín nội dung demo bắt buộc theo đề, hai kịch bản lỗi/phục hồi, việc cần làm của TV1–TV3 và bằng chứng cần chuẩn bị.
+
+Thiết kế bảng, trường, khóa, index và ràng buộc cho từng service: [Thiết kế database DS03](docs/THIET_KE_DATABASE_DS03.md).
+
+Toàn bộ sơ đồ nghiệp vụ, nhánh lỗi, Saga và phân công triển khai nằm trong [so_do_luong.md](so_do_luong.md). Xem dạng hình có ô và mũi tên tại [trang sơ đồ](so_do_luong.html). Tài liệu phân biệt yêu cầu bắt buộc của đề với lựa chọn của nhóm.
+
 | Thành viên | Thư mục sở hữu | Nhánh |
 |---|---|---|
 | TV1 | src/user-service | feature/user-service |
