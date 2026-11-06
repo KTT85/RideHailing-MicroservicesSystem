@@ -1,0 +1,46 @@
+name: ridehailing-trip
+services:
+  postgres:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: trip_app
+      POSTGRES_PASSWORD: ${TRIP_DB_PASSWORD:?Set TRIP_DB_PASSWORD}
+      POSTGRES_DB: trip_service_db
+    ports: ["127.0.0.1:5433:5432"]
+    volumes: ["trip-data:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trip_app -d trip_service_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:?Set RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?Set RABBITMQ_PASSWORD}
+    ports: ["127.0.0.1:5672:5672", "127.0.0.1:15672:15672"]
+    volumes: ["trip-rabbit:/var/lib/rabbitmq"]
+    healthcheck:
+      test: ["CMD-SHELL", "gosu rabbitmq rabbitmq-diagnostics -q check_running && gosu rabbitmq rabbitmq-diagnostics -q check_port_connectivity"]
+      start_period: 30s
+      interval: 5s
+      timeout: 20s
+      retries: 20
+  trip:
+    build:
+      context: .
+      dockerfile: deploy/trip-service/Dockerfile.integrated
+    environment:
+      DATABASE_URL: ${TRIP_DATABASE_URL:?Set TRIP_DATABASE_URL with postgres hostname}
+      RABBITMQ_URL: ${TRIP_RABBITMQ_URL:?Set TRIP_RABBITMQ_URL with rabbitmq hostname}
+      PORT: 3000
+    ports: ["127.0.0.1:3000:3000"]
+    restart: on-failure
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+volumes:
+  trip-data:
+  trip-rabbit:

@@ -1,0 +1,7 @@
+**/node_modules
+**/dist
+**/target
+**/.jest-cache
+.npm-cache
+.git
+**/.env

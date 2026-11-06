@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": { "outDir": "dist-messaging", "rootDir": "src" },
+  "include": [
+    "src/messaging/**/*.ts", "src/outbox/**/*.ts", "src/saga/**/*.ts",
+    "src/repositories/InMemoryTripRepository.ts",
+    "src/repositories/InMemoryProcessedEventRepository.ts"
+  ]
+}
