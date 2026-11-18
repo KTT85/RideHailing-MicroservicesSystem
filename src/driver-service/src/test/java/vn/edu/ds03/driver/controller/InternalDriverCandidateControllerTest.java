@@ -41,6 +41,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import vn.edu.ds03.driver.DriverServiceApplication;
 import vn.edu.ds03.driver.model.Driver;
+import vn.edu.ds03.driver.model.DriverStatus;
 import vn.edu.ds03.driver.model.Vehicle;
 import vn.edu.ds03.driver.model.VehicleType;
 import vn.edu.ds03.driver.repository.DriverRepository;
@@ -194,7 +195,87 @@ class InternalDriverCandidateControllerTest {
                 Arguments.of("GET", "/internal/drivers/unknown", false, 401),
                 Arguments.of("POST", "/internal/drivers/candidates", true, 403),
                 Arguments.of("DELETE", "/internal/drivers/candidates", true, 403),
-                Arguments.of("GET", "/internal/drivers/unknown", true, 403));
+                Arguments.of("GET", "/internal/drivers/unknown", true, 403),
+                Arguments.of("GET", "/internal/drivers/driver-1/reserve", false, 401),
+                Arguments.of("GET", "/internal/drivers/driver-1/reserve", true, 403),
+                Arguments.of("DELETE", "/internal/drivers/driver-1/release", true, 403));
+    }
+
+    @Test
+    @DisplayName("POST /internal/drivers/{id}/reserve|start|release enforce X-Service-Token, validation, and lifecycle")
+    void reservationLifecycleEndpoints_validInvalidAndUnauthorizedRequests_behaveAsExpected() throws Exception {
+        String driverId = "aaaaaaaa-1111-2222-3333-444444444444";
+        String tripId = "bbbbbbbb-1111-2222-3333-444444444444";
+        String validBody = "{\"tripId\":\"" + tripId + "\"}";
+
+        assertThat(sendInternalJson("POST", "/internal/drivers/" + driverId + "/reserve", null, validBody).statusCode())
+                .isEqualTo(401);
+        assertThat(sendInternalJson("POST", "/internal/drivers/" + driverId + "/start", null, validBody).statusCode())
+                .isEqualTo(401);
+        assertThat(sendInternalJson("POST", "/internal/drivers/" + driverId + "/release", null, validBody).statusCode())
+                .isEqualTo(401);
+
+        for (String invalidBody : new String[]{
+                "{}",
+                "{\"tripId\":\"\"}",
+                "{\"tripId\":\"   \"}",
+                "{\"tripId\":\"" + "x".repeat(37) + "\"}",
+                "{\"tripId\":\"bad/trip\"}"
+        }) {
+            HttpResponse<String> badReq = sendInternalJson(
+                    "POST", "/internal/drivers/" + driverId + "/reserve", INTERNAL_TOKEN, invalidBody);
+            assertThat(badReq.statusCode()).isEqualTo(400);
+        }
+        verifyNoInteractions(driverRepository);
+
+        Driver reservedDriver = buildAvailableDriver(
+                driverId, "user-1", "veh-1", "51A-777.01", VehicleType.BIKE, "10.7768890", "106.7008060");
+        ReflectionTestUtils.setField(reservedDriver, "status", DriverStatus.RESERVED);
+        ReflectionTestUtils.setField(reservedDriver, "currentTripId", tripId);
+        when(driverRepository.reserveAvailableDriver(driverId, tripId)).thenReturn(1);
+        when(driverRepository.findWithVehicleById(driverId))
+                .thenReturn(java.util.Optional.of(reservedDriver));
+
+        HttpResponse<String> reserveResp = sendInternalJson(
+                "POST", "/internal/drivers/" + driverId + "/reserve", INTERNAL_TOKEN, validBody);
+        assertThat(reserveResp.statusCode()).isEqualTo(200);
+        assertThat(JSON_MAPPER.readTree(reserveResp.body()).get("status").asString()).isEqualTo("RESERVED");
+
+        Driver busyDriver = buildAvailableDriver(
+                driverId, "user-1", "veh-1", "51A-777.01", VehicleType.BIKE, "10.7768890", "106.7008060");
+        ReflectionTestUtils.setField(busyDriver, "status", DriverStatus.BUSY);
+        ReflectionTestUtils.setField(busyDriver, "currentTripId", tripId);
+        when(driverRepository.startReservedTrip(driverId, tripId)).thenReturn(1);
+        when(driverRepository.findWithVehicleById(driverId))
+                .thenReturn(java.util.Optional.of(busyDriver));
+
+        HttpResponse<String> startResp = sendInternalJson(
+                "POST", "/internal/drivers/" + driverId + "/start", INTERNAL_TOKEN, validBody);
+        assertThat(startResp.statusCode()).isEqualTo(200);
+        assertThat(JSON_MAPPER.readTree(startResp.body()).get("status").asString()).isEqualTo("BUSY");
+
+        Driver releasedDriver = buildAvailableDriver(
+                driverId, "user-1", "veh-1", "51A-777.01", VehicleType.BIKE, "10.7768890", "106.7008060");
+        when(driverRepository.releaseDriverFromTrip(driverId, tripId)).thenReturn(1);
+        when(driverRepository.findWithVehicleById(driverId))
+                .thenReturn(java.util.Optional.of(releasedDriver));
+
+        HttpResponse<String> releaseResp = sendInternalJson(
+                "POST", "/internal/drivers/" + driverId + "/release", INTERNAL_TOKEN, validBody);
+        assertThat(releaseResp.statusCode()).isEqualTo(200);
+        assertThat(JSON_MAPPER.readTree(releaseResp.body()).get("status").asString()).isEqualTo("AVAILABLE");
+    }
+
+    private HttpResponse<String> sendInternalJson(
+            String method, String path, String serviceToken, String jsonBody) throws Exception {
+        HttpRequest.Builder builder = HttpRequest.newBuilder()
+                .uri(URI.create(baseUrl + path))
+                .header("Content-Type", "application/json")
+                .method(method, HttpRequest.BodyPublishers.ofString(jsonBody));
+        if (serviceToken != null) {
+            builder.header("X-Service-Token", serviceToken);
+        }
+        return HTTP_CLIENT.send(builder.build(), HttpResponse.BodyHandlers.ofString());
     }
 
     private HttpResponse<String> sendInternalRequest(

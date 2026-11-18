@@ -210,7 +210,7 @@ class DriverProfileServiceTest {
         driver.attachVehicle(vehicle);
         ReflectionTestUtils.setField(driver, "id", "driver-loc-1");
         ReflectionTestUtils.setField(vehicle, "id", "vehicle-loc-1");
-        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+        when(driverRepository.findWithVehicleForUpdateByUserId(NORMALIZED_USER_ID))
                 .thenReturn(Optional.of(driver));
         when(driverRepository.saveAndFlush(driver)).thenReturn(driver);
 
@@ -221,7 +221,7 @@ class DriverProfileServiceTest {
         assertThat(response.driverId()).isEqualTo("driver-loc-1");
         assertThat(response.latitude()).isEqualTo(new BigDecimal("10.7758439"));
         assertThat(response.longitude()).isEqualTo(new BigDecimal("106.7017555"));
-        verify(driverRepository).findWithVehicleByUserId(NORMALIZED_USER_ID);
+        verify(driverRepository).findWithVehicleForUpdateByUserId(NORMALIZED_USER_ID);
         verify(driverRepository).saveAndFlush(driver);
         verifyNoMoreInteractions(driverRepository);
     }
@@ -229,7 +229,7 @@ class DriverProfileServiceTest {
     @Test
     @DisplayName("updateLocation throws 404 Not Found when driver profile does not exist")
     void updateLocation_missingDriver_throwsNotFoundWithoutSaving() {
-        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+        when(driverRepository.findWithVehicleForUpdateByUserId(NORMALIZED_USER_ID))
                 .thenReturn(Optional.empty());
         UpdateDriverLocationRequest request = new UpdateDriverLocationRequest(
                 new BigDecimal("10.7758439"), new BigDecimal("106.7017555"));
@@ -241,7 +241,7 @@ class DriverProfileServiceTest {
                     assertThat(statusEx.getReason()).isEqualTo("Driver profile not found");
                 });
 
-        verify(driverRepository).findWithVehicleByUserId(NORMALIZED_USER_ID);
+        verify(driverRepository).findWithVehicleForUpdateByUserId(NORMALIZED_USER_ID);
         verify(driverRepository, never()).saveAndFlush(any(Driver.class));
         verifyNoMoreInteractions(driverRepository);
     }
@@ -270,7 +270,7 @@ class DriverProfileServiceTest {
         driver.updateLocation(new BigDecimal("10.7626220"), new BigDecimal("106.6601720"));
         ReflectionTestUtils.setField(driver, "id", "driver-avail-1");
         ReflectionTestUtils.setField(vehicle, "id", "vehicle-avail-1");
-        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+        when(driverRepository.findWithVehicleForUpdateByUserId(NORMALIZED_USER_ID))
                 .thenReturn(Optional.of(driver));
         when(driverRepository.saveAndFlush(driver)).thenReturn(driver);
 
@@ -290,7 +290,7 @@ class DriverProfileServiceTest {
     void updateAvailability_missingCoordinatesOrActiveTrip_throwsConflictWithoutSaving() {
         Driver noLocationDriver = new Driver(NORMALIZED_USER_ID);
         noLocationDriver.attachVehicle(new Vehicle("51a-123.45", VehicleType.BIKE));
-        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+        when(driverRepository.findWithVehicleForUpdateByUserId(NORMALIZED_USER_ID))
                 .thenReturn(Optional.of(noLocationDriver));
 
         assertThatThrownBy(() -> driverProfileService.updateAvailability(
@@ -304,7 +304,7 @@ class DriverProfileServiceTest {
         ReflectionTestUtils.setField(busyDriver, "status", DriverStatus.BUSY);
         ReflectionTestUtils.setField(busyDriver, "acceptingTrips", true);
         ReflectionTestUtils.setField(busyDriver, "currentTripId", "trip-999");
-        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+        when(driverRepository.findWithVehicleForUpdateByUserId(NORMALIZED_USER_ID))
                 .thenReturn(Optional.of(busyDriver));
 
         assertThatThrownBy(() -> driverProfileService.updateAvailability(
@@ -318,7 +318,7 @@ class DriverProfileServiceTest {
     @Test
     @DisplayName("updateAvailability throws 404 Not Found when driver profile does not exist")
     void updateAvailability_missingDriver_throwsNotFoundWithoutSaving() {
-        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+        when(driverRepository.findWithVehicleForUpdateByUserId(NORMALIZED_USER_ID))
                 .thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> driverProfileService.updateAvailability(

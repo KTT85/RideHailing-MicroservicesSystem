@@ -372,7 +372,7 @@ class DriverProfileSecurityControllerTest {
         driver.attachVehicle(vehicle);
         ReflectionTestUtils.setField(driver, "id", "driver-loc-1");
         ReflectionTestUtils.setField(vehicle, "id", "vehicle-loc-1");
-        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+        when(driverRepository.findWithVehicleForUpdateByUserId(NORMALIZED_DRIVER_USER_ID))
                 .thenReturn(Optional.of(driver));
         when(driverRepository.saveAndFlush(driver)).thenReturn(driver);
 
@@ -390,7 +390,7 @@ class DriverProfileSecurityControllerTest {
         assertThat(json.get("userId").asString()).isEqualTo(NORMALIZED_DRIVER_USER_ID);
         assertThat(json.get("latitude").decimalValue()).isEqualByComparingTo("10.7626224");
         assertThat(json.get("longitude").decimalValue()).isEqualByComparingTo("106.6601724");
-        verify(driverRepository).findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID);
+        verify(driverRepository).findWithVehicleForUpdateByUserId(NORMALIZED_DRIVER_USER_ID);
         verify(driverRepository).saveAndFlush(driver);
         verifyNoMoreInteractions(driverRepository);
     }
@@ -433,7 +433,7 @@ class DriverProfileSecurityControllerTest {
     @Test
     @DisplayName("PUT /drivers/me/location returns 404 ProblemDetail when driver profile does not exist")
     void updateMyLocation_missingProfile_returns404ProblemDetail() throws Exception {
-        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+        when(driverRepository.findWithVehicleForUpdateByUserId(NORMALIZED_DRIVER_USER_ID))
                 .thenReturn(Optional.empty());
         String token = issueToken(ISSUER, MIXED_CASE_DRIVER_USER_ID, "DRIVER", Instant.now().plusSeconds(3600));
 
@@ -471,7 +471,7 @@ class DriverProfileSecurityControllerTest {
         driver.updateLocation(new BigDecimal("10.7626220"), new BigDecimal("106.6601720"));
         ReflectionTestUtils.setField(driver, "id", "driver-avail-1");
         ReflectionTestUtils.setField(vehicle, "id", "vehicle-avail-1");
-        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+        when(driverRepository.findWithVehicleForUpdateByUserId(NORMALIZED_DRIVER_USER_ID))
                 .thenReturn(Optional.of(driver));
         when(driverRepository.saveAndFlush(driver)).thenReturn(driver);
 
@@ -505,7 +505,7 @@ class DriverProfileSecurityControllerTest {
 
         Driver noLocationDriver = new Driver(NORMALIZED_DRIVER_USER_ID);
         noLocationDriver.attachVehicle(new Vehicle("51a-123.45", VehicleType.BIKE));
-        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+        when(driverRepository.findWithVehicleForUpdateByUserId(NORMALIZED_DRIVER_USER_ID))
                 .thenReturn(Optional.of(noLocationDriver));
 
         HttpResponse<String> noLocResp = sendJson(
@@ -519,7 +519,7 @@ class DriverProfileSecurityControllerTest {
         ReflectionTestUtils.setField(reservedDriver, "status", DriverStatus.RESERVED);
         ReflectionTestUtils.setField(reservedDriver, "acceptingTrips", true);
         ReflectionTestUtils.setField(reservedDriver, "currentTripId", "trip-1");
-        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+        when(driverRepository.findWithVehicleForUpdateByUserId(NORMALIZED_DRIVER_USER_ID))
                 .thenReturn(Optional.of(reservedDriver));
 
         HttpResponse<String> activeTripResp = sendJson(
@@ -561,7 +561,7 @@ class DriverProfileSecurityControllerTest {
                 .isEqualTo(403);
         verifyNoInteractions(driverRepository);
 
-        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+        when(driverRepository.findWithVehicleForUpdateByUserId(NORMALIZED_DRIVER_USER_ID))
                 .thenReturn(Optional.empty());
         String driverToken = issueToken(
                 ISSUER, MIXED_CASE_DRIVER_USER_ID, "DRIVER", Instant.now().plusSeconds(3600));
