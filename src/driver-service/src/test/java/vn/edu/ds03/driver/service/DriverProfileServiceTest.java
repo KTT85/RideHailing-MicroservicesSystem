@@ -8,6 +8,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
+import java.util.Optional;
 import org.assertj.core.api.InstanceOfAssertFactories;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -28,6 +30,7 @@ import vn.edu.ds03.driver.dto.CreateDriverProfileRequest;
 import vn.edu.ds03.driver.dto.DriverProfileResponse;
 import vn.edu.ds03.driver.model.Driver;
 import vn.edu.ds03.driver.model.DriverStatus;
+import vn.edu.ds03.driver.model.Vehicle;
 import vn.edu.ds03.driver.model.VehicleType;
 import vn.edu.ds03.driver.repository.DriverRepository;
 
@@ -78,6 +81,9 @@ class DriverProfileServiceTest {
         assertThat(response.userId()).isEqualTo(NORMALIZED_USER_ID);
         assertThat(response.status()).isEqualTo(DriverStatus.OFFLINE);
         assertThat(response.acceptingTrips()).isFalse();
+        assertThat(response.currentTripId()).isNull();
+        assertThat(response.latitude()).isNull();
+        assertThat(response.longitude()).isNull();
         assertThat(response.vehicle().vehicleId()).isEqualTo("99999999-8888-7777-6666-555555555555");
         assertThat(response.vehicle().licensePlate()).isEqualTo("51A-123.45");
         assertThat(response.vehicle().vehicleType()).isEqualTo(vehicleType);
@@ -131,5 +137,66 @@ class DriverProfileServiceTest {
                     assertThat(statusEx.getReason()).isEqualTo("Driver profile or license plate already exists");
                     assertThat(statusEx.getReason()).doesNotContain("uq_vehicles_license_plate");
                 });
+    }
+
+    @Test
+    @DisplayName("getCurrentProfile normalizes userId and maps existing driver, coordinates, trip, and vehicle")
+    void getCurrentProfile_existingDriver_returnsFullDriverProfileResponse() {
+        Driver driver = new Driver(NORMALIZED_USER_ID);
+        Vehicle vehicle = new Vehicle("59x1-678.90", VehicleType.CAR);
+        driver.attachVehicle(vehicle);
+        ReflectionTestUtils.setField(driver, "id", "driver-id-1");
+        ReflectionTestUtils.setField(vehicle, "id", "vehicle-id-1");
+        ReflectionTestUtils.setField(driver, "status", DriverStatus.BUSY);
+        ReflectionTestUtils.setField(driver, "acceptingTrips", true);
+        ReflectionTestUtils.setField(driver, "currentTripId", "trip-id-1");
+        ReflectionTestUtils.setField(driver, "latitude", new BigDecimal("10.7626220"));
+        ReflectionTestUtils.setField(driver, "longitude", new BigDecimal("106.6601720"));
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+                .thenReturn(Optional.of(driver));
+
+        DriverProfileResponse response = driverProfileService.getCurrentProfile("  " + MIXED_CASE_USER_ID + "  ");
+
+        assertThat(response.driverId()).isEqualTo("driver-id-1");
+        assertThat(response.userId()).isEqualTo(NORMALIZED_USER_ID);
+        assertThat(response.status()).isEqualTo(DriverStatus.BUSY);
+        assertThat(response.acceptingTrips()).isTrue();
+        assertThat(response.currentTripId()).isEqualTo("trip-id-1");
+        assertThat(response.latitude()).isEqualByComparingTo("10.7626220");
+        assertThat(response.longitude()).isEqualByComparingTo("106.6601720");
+        assertThat(response.vehicle().vehicleId()).isEqualTo("vehicle-id-1");
+        assertThat(response.vehicle().licensePlate()).isEqualTo("59X1-678.90");
+        assertThat(response.vehicle().vehicleType()).isEqualTo(VehicleType.CAR);
+        verify(driverRepository).findWithVehicleByUserId(NORMALIZED_USER_ID);
+        verifyNoMoreInteractions(driverRepository);
+    }
+
+    @Test
+    @DisplayName("getCurrentProfile throws 404 Not Found when driver profile does not exist")
+    void getCurrentProfile_missingDriver_throwsNotFound() {
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> driverProfileService.getCurrentProfile(MIXED_CASE_USER_ID))
+                .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                .satisfies(statusEx -> {
+                    assertThat(statusEx.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+                    assertThat(statusEx.getReason()).isEqualTo("Driver profile not found");
+                });
+
+        verify(driverRepository).findWithVehicleByUserId(NORMALIZED_USER_ID);
+        verifyNoMoreInteractions(driverRepository);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = "   ")
+    @DisplayName("getCurrentProfile throws 401 Unauthorized when userId subject is null or blank")
+    void getCurrentProfile_nullOrBlankUserId_throwsUnauthorizedWithoutCallingRepository(String invalidUserId) {
+        assertThatThrownBy(() -> driverProfileService.getCurrentProfile(invalidUserId))
+                .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                .satisfies(statusEx -> assertThat(statusEx.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+
+        verifyNoMoreInteractions(driverRepository);
     }
 }

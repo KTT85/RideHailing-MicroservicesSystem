@@ -124,4 +124,23 @@ class DriverRepositoryPersistenceTest {
         assertThatThrownBy(() -> driverRepository.saveAndFlush(duplicateUser))
                 .isInstanceOf(DataIntegrityViolationException.class);
     }
+
+    @Test
+    @DisplayName("findWithVehicleByUserId eagerly loads vehicle outside transaction and getCurrentProfile returns it")
+    void findWithVehicleByUserId_outsideTransaction_loadsVehicleWithoutLazyInitError() {
+        DriverProfileResponse created = driverProfileService.createProfile(
+                "550E8400-E29B-41D4-A716-446655440000",
+                new CreateDriverProfileRequest(" 59c-246.80 ", VehicleType.CAR));
+
+        Driver fetched = driverRepository
+                .findWithVehicleByUserId("550e8400-e29b-41d4-a716-446655440000")
+                .orElseThrow();
+        assertThat(fetched.getId()).isEqualTo(created.driverId());
+        assertThat(fetched.getVehicle().getLicensePlate()).isEqualTo("59C-246.80");
+
+        DriverProfileResponse readBack = driverProfileService.getCurrentProfile("550E8400-E29B-41D4-A716-446655440000");
+        assertThat(readBack.driverId()).isEqualTo(created.driverId());
+        assertThat(readBack.vehicle().licensePlate()).isEqualTo("59C-246.80");
+        assertThat(driverRepository.findWithVehicleByUserId("00000000-0000-0000-0000-000000000000")).isEmpty();
+    }
 }

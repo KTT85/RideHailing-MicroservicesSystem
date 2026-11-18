@@ -7,6 +7,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import java.math.BigDecimal;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -14,6 +15,7 @@ import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.Optional;
 import java.util.stream.Stream;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
@@ -44,6 +46,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import vn.edu.ds03.driver.DriverServiceApplication;
 import vn.edu.ds03.driver.model.Driver;
+import vn.edu.ds03.driver.model.Vehicle;
 import vn.edu.ds03.driver.model.VehicleType;
 import vn.edu.ds03.driver.repository.DriverRepository;
 
@@ -131,6 +134,9 @@ class DriverProfileSecurityControllerTest {
         assertThat(json.get("userId").asString()).isEqualTo(NORMALIZED_DRIVER_USER_ID);
         assertThat(json.get("status").asString()).isEqualTo("OFFLINE");
         assertThat(json.get("acceptingTrips").asBoolean()).isFalse();
+        assertThat(json.get("currentTripId").isNull()).isTrue();
+        assertThat(json.get("latitude").isNull()).isTrue();
+        assertThat(json.get("longitude").isNull()).isTrue();
         assertThat(json.get("vehicle").get("vehicleId").asString()).isEqualTo("vehicle-uuid-1");
         assertThat(json.get("vehicle").get("licensePlate").asString()).isEqualTo("1234567890ABCDEFGHIJ");
         assertThat(json.get("vehicle").get("vehicleType").asString()).isEqualTo(vehicleType.name());
@@ -298,6 +304,66 @@ class DriverProfileSecurityControllerTest {
     }
 
     @Test
+    @DisplayName("GET /drivers/me returns 200 OK with current driver profile and ignores spoofed userId query param")
+    void getMyProfile_validDriverJwtWithProfile_returns200AndUsesTokenSubject() throws Exception {
+        Driver driver = new Driver(NORMALIZED_DRIVER_USER_ID);
+        Vehicle vehicle = new Vehicle("51h-555.66", VehicleType.CAR);
+        driver.attachVehicle(vehicle);
+        ReflectionTestUtils.setField(driver, "id", "driver-me-1");
+        ReflectionTestUtils.setField(vehicle, "id", "vehicle-me-1");
+        ReflectionTestUtils.setField(driver, "latitude", new BigDecimal("10.7768890"));
+        ReflectionTestUtils.setField(driver, "longitude", new BigDecimal("106.7008060"));
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+                .thenReturn(Optional.of(driver));
+
+        String token = issueToken(ISSUER, MIXED_CASE_DRIVER_USER_ID, "DRIVER", Instant.now().plusSeconds(3600));
+        HttpResponse<String> response = sendRequest(
+                "GET", "/drivers/me?userId=spoofed-other-user", "Bearer " + token);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode json = JSON_MAPPER.readTree(response.body());
+        assertThat(json.get("driverId").asString()).isEqualTo("driver-me-1");
+        assertThat(json.get("userId").asString()).isEqualTo(NORMALIZED_DRIVER_USER_ID);
+        assertThat(json.get("status").asString()).isEqualTo("OFFLINE");
+        assertThat(json.get("acceptingTrips").asBoolean()).isFalse();
+        assertThat(json.get("currentTripId").isNull()).isTrue();
+        assertThat(json.get("latitude").decimalValue()).isEqualByComparingTo("10.7768890");
+        assertThat(json.get("longitude").decimalValue()).isEqualByComparingTo("106.7008060");
+        assertThat(json.get("vehicle").get("vehicleId").asString()).isEqualTo("vehicle-me-1");
+        assertThat(json.get("vehicle").get("licensePlate").asString()).isEqualTo("51H-555.66");
+        assertThat(json.get("vehicle").get("vehicleType").asString()).isEqualTo("CAR");
+
+        verify(driverRepository).findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID);
+        verifyNoMoreInteractions(driverRepository);
+    }
+
+    @Test
+    @DisplayName("GET /drivers/me returns 404 ProblemDetail when driver profile does not exist")
+    void getMyProfile_missingProfile_returns404ProblemDetail() throws Exception {
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+                .thenReturn(Optional.empty());
+        String token = issueToken(ISSUER, MIXED_CASE_DRIVER_USER_ID, "DRIVER", Instant.now().plusSeconds(3600));
+
+        HttpResponse<String> response = sendRequest("GET", "/drivers/me", "Bearer " + token);
+
+        assertThat(response.statusCode()).isEqualTo(404);
+        JsonNode problem = JSON_MAPPER.readTree(response.body());
+        assertThat(problem.get("status").asInt()).isEqualTo(404);
+        assertThat(problem.get("detail").asString()).isEqualTo("Driver profile not found");
+    }
+
+    @Test
+    @DisplayName("GET /drivers/me enforces 401 when anonymous and 403 when role is not DRIVER")
+    void getMyProfile_anonymousOrNonDriverRole_returns401Or403() throws Exception {
+        assertThat(sendRequest("GET", "/drivers/me", null).statusCode()).isEqualTo(401);
+
+        String passengerToken = issueToken(
+                ISSUER, MIXED_CASE_DRIVER_USER_ID, "PASSENGER", Instant.now().plusSeconds(3600));
+        assertThat(sendRequest("GET", "/drivers/me", "Bearer " + passengerToken).statusCode()).isEqualTo(403);
+        verifyNoInteractions(driverRepository);
+    }
+
+    @Test
     @DisplayName("Real Spring Boot Actuator health and info endpoints are public and hide internal details")
     void actuatorHealthAndInfo_withoutJwt_return200WithoutComponentDetails() throws Exception {
         HttpResponse<String> healthResponse = sendRequest("GET", "/actuator/health", null);
@@ -330,9 +396,11 @@ class DriverProfileSecurityControllerTest {
                 Arguments.of("GET", "/actuator/env", false, 401),
                 Arguments.of("GET", "/drivers/profile", false, 401),
                 Arguments.of("DELETE", "/drivers/profile", false, 401),
+                Arguments.of("DELETE", "/drivers/me", false, 401),
                 Arguments.of("GET", "/actuator/env", true, 403),
                 Arguments.of("GET", "/drivers/profile", true, 403),
-                Arguments.of("DELETE", "/drivers/profile", true, 403));
+                Arguments.of("DELETE", "/drivers/profile", true, 403),
+                Arguments.of("DELETE", "/drivers/me", true, 403));
     }
 
     private HttpResponse<String> sendJson(String method, String path, String authHeader, String jsonBody)
