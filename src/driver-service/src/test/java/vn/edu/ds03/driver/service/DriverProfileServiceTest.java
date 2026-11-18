@@ -1,0 +1,135 @@
+package vn.edu.ds03.driver.service;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
+
+import org.assertj.core.api.InstanceOfAssertFactories;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.NullAndEmptySource;
+import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.http.HttpStatus;
+import org.springframework.test.util.ReflectionTestUtils;
+import org.springframework.web.server.ResponseStatusException;
+import vn.edu.ds03.driver.dto.CreateDriverProfileRequest;
+import vn.edu.ds03.driver.dto.DriverProfileResponse;
+import vn.edu.ds03.driver.model.Driver;
+import vn.edu.ds03.driver.model.DriverStatus;
+import vn.edu.ds03.driver.model.VehicleType;
+import vn.edu.ds03.driver.repository.DriverRepository;
+
+@ExtendWith(MockitoExtension.class)
+class DriverProfileServiceTest {
+
+    private static final String MIXED_CASE_USER_ID = "550E8400-E29B-41D4-A716-446655440000";
+    private static final String NORMALIZED_USER_ID = "550e8400-e29b-41d4-a716-446655440000";
+
+    @Mock
+    private DriverRepository driverRepository;
+
+    private DriverProfileService driverProfileService;
+
+    @BeforeEach
+    void setUp() {
+        driverProfileService = new DriverProfileService(driverRepository);
+    }
+
+    @ParameterizedTest
+    @EnumSource(VehicleType.class)
+    @DisplayName("createProfile normalizes userId before lookup and persists offline driver with uppercase plate")
+    void createProfile_validRequest_normalizesUserIdAndSavesDriverAndVehicle(VehicleType vehicleType) {
+        CreateDriverProfileRequest request = new CreateDriverProfileRequest(" 51a-123.45 ", vehicleType);
+        when(driverRepository.existsByUserId(NORMALIZED_USER_ID)).thenReturn(false);
+        when(driverRepository.saveAndFlush(any(Driver.class))).thenAnswer(invocation -> {
+            Driver saved = invocation.getArgument(0);
+            ReflectionTestUtils.setField(saved, "id", "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+            ReflectionTestUtils.setField(saved.getVehicle(), "id", "99999999-8888-7777-6666-555555555555");
+            return saved;
+        });
+
+        DriverProfileResponse response = driverProfileService.createProfile(MIXED_CASE_USER_ID, request);
+
+        ArgumentCaptor<Driver> driverCaptor = ArgumentCaptor.forClass(Driver.class);
+        verify(driverRepository).existsByUserId(NORMALIZED_USER_ID);
+        verify(driverRepository).saveAndFlush(driverCaptor.capture());
+        verifyNoMoreInteractions(driverRepository);
+
+        Driver persisted = driverCaptor.getValue();
+        assertThat(persisted.getUserId()).isEqualTo(NORMALIZED_USER_ID);
+        assertThat(persisted.getStatus()).isEqualTo(DriverStatus.OFFLINE);
+        assertThat(persisted.isAcceptingTrips()).isFalse();
+        assertThat(persisted.getVehicle().getLicensePlate()).isEqualTo("51A-123.45");
+        assertThat(persisted.getVehicle().getVehicleType()).isEqualTo(vehicleType);
+
+        assertThat(response.driverId()).isEqualTo("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
+        assertThat(response.userId()).isEqualTo(NORMALIZED_USER_ID);
+        assertThat(response.status()).isEqualTo(DriverStatus.OFFLINE);
+        assertThat(response.acceptingTrips()).isFalse();
+        assertThat(response.vehicle().vehicleId()).isEqualTo("99999999-8888-7777-6666-555555555555");
+        assertThat(response.vehicle().licensePlate()).isEqualTo("51A-123.45");
+        assertThat(response.vehicle().vehicleType()).isEqualTo(vehicleType);
+    }
+
+    @Test
+    @DisplayName("createProfile throws 409 Conflict when normalized userId already exists")
+    void createProfile_existingMixedCaseUserId_throwsConflictWithoutSaving() {
+        CreateDriverProfileRequest request = new CreateDriverProfileRequest("51A-123.45", VehicleType.CAR);
+        when(driverRepository.existsByUserId(NORMALIZED_USER_ID)).thenReturn(true);
+
+        assertThatThrownBy(() -> driverProfileService.createProfile(MIXED_CASE_USER_ID, request))
+                .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                .satisfies(statusEx -> {
+                    assertThat(statusEx.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(statusEx.getReason()).isEqualTo("Driver profile already exists");
+                });
+
+        verify(driverRepository).existsByUserId(NORMALIZED_USER_ID);
+        verify(driverRepository, never()).saveAndFlush(any(Driver.class));
+        verifyNoMoreInteractions(driverRepository);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = "   ")
+    @DisplayName("createProfile throws 401 Unauthorized when userId subject is null or blank")
+    void createProfile_nullOrBlankUserId_throwsUnauthorizedWithoutCallingRepository(String invalidUserId) {
+        CreateDriverProfileRequest request = new CreateDriverProfileRequest("51A-123.45", VehicleType.BIKE);
+
+        assertThatThrownBy(() -> driverProfileService.createProfile(invalidUserId, request))
+                .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                .satisfies(statusEx -> assertThat(statusEx.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+
+        verifyNoMoreInteractions(driverRepository);
+    }
+
+    @Test
+    @DisplayName("createProfile translates DataIntegrityViolationException into 409 Conflict without SQL details")
+    void createProfile_dataIntegrityViolationOnSave_throwsConflictWithoutExposingSqlDetails() {
+        CreateDriverProfileRequest request = new CreateDriverProfileRequest("51A-123.45", VehicleType.CAR);
+        when(driverRepository.existsByUserId(NORMALIZED_USER_ID)).thenReturn(false);
+        when(driverRepository.saveAndFlush(any(Driver.class)))
+                .thenThrow(new DataIntegrityViolationException(
+                        "Duplicate entry '51A-123.45' for key 'uq_vehicles_license_plate'"));
+
+        assertThatThrownBy(() -> driverProfileService.createProfile(MIXED_CASE_USER_ID, request))
+                .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                .satisfies(statusEx -> {
+                    assertThat(statusEx.getStatusCode()).isEqualTo(HttpStatus.CONFLICT);
+                    assertThat(statusEx.getReason()).isEqualTo("Driver profile or license plate already exists");
+                    assertThat(statusEx.getReason()).doesNotContain("uq_vehicles_license_plate");
+                });
+    }
+}
