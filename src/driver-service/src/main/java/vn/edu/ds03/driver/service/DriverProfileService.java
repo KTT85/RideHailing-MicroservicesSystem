@@ -60,7 +60,7 @@ public class DriverProfileService {
     @Transactional
     public DriverProfileResponse updateLocation(String userId, UpdateDriverLocationRequest request) {
         String normalizedUserId = normalizeAndValidateUserId(userId);
-        Driver driver = driverRepository.findWithVehicleByUserId(normalizedUserId)
+        Driver driver = driverRepository.findWithVehicleForUpdateByUserId(normalizedUserId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Driver profile not found"));
         driver.updateLocation(request.latitude(), request.longitude());
@@ -71,7 +71,7 @@ public class DriverProfileService {
     @Transactional
     public DriverProfileResponse updateAvailability(String userId, UpdateDriverAvailabilityRequest request) {
         String normalizedUserId = normalizeAndValidateUserId(userId);
-        Driver driver = driverRepository.findWithVehicleByUserId(normalizedUserId)
+        Driver driver = driverRepository.findWithVehicleForUpdateByUserId(normalizedUserId)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Driver profile not found"));
         try {
