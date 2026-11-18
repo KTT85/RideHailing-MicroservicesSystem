@@ -70,6 +70,10 @@ Both `latitude` (`[-90, 90]`) and `longitude` (`[-180, 180]`) are required and n
 
 Transitions the driver between `OFFLINE` (`acceptingTrips = false`) and `AVAILABLE` (`acceptingTrips = true`). Going `AVAILABLE` requires valid GPS coordinates to be set first; otherwise HTTP 409 (`ProblemDetail`) is returned. Availability cannot be toggled while the driver is assigned to an active trip (`RESERVED` or `BUSY`), which also returns HTTP 409.
 
+## Internal candidate lookup (for Matching Service)
+
+`GET /internal/drivers/candidates?pickupLatitude=10.7768890&pickupLongitude=106.7008060&vehicleType=BIKE&limit=5` requires `X-Service-Token: <DRIVER_INTERNAL_TOKEN>` (`>= 32` characters; fails closed with HTTP 401 when unset or mismatched). Returns `AVAILABLE` drivers with matching `vehicleType` ordered by Haversine distance (`distanceKm`) ascending up to `limit` (`1..20`).
+
 ## JWT settings
 
 The service verifies HS256 tokens from User Service. It requires the same Base64 `JWT_SECRET` and `JWT_ISSUER` as User Service; the issuer defaults to `ds03-user-service`. The decoded secret must contain at least 32 bytes. Do not commit the secret.
