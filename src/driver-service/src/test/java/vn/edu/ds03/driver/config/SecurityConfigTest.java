@@ -77,6 +77,20 @@ class SecurityConfigTest {
     }
 
     @Test
+    @DisplayName("parseInternalTokenDigest fails closed (null) when blank, rejects < 32 chars, and hashes >= 32 chars")
+    void parseInternalTokenDigest_blankShortAndValidTokens_behavesAsExpected() {
+        assertThat(SecurityConfig.parseInternalTokenDigest(null)).isNull();
+        assertThat(SecurityConfig.parseInternalTokenDigest("")).isNull();
+        assertThat(SecurityConfig.parseInternalTokenDigest("   ")).isNull();
+
+        assertThatThrownBy(() -> SecurityConfig.parseInternalTokenDigest("x".repeat(31)))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("32 characters");
+
+        assertThat(SecurityConfig.parseInternalTokenDigest("x".repeat(32))).hasSize(32);
+    }
+
+    @Test
     @DisplayName("jwtDecoder trims Base64 secret and decodes valid HS256 token with matching issuer and subject")
     void jwtDecoder_validHs256Token_returnsDecodedJwtClaims() {
         Instant now = Instant.now();

@@ -21,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import vn.edu.ds03.driver.DriverServiceApplication;
 import vn.edu.ds03.driver.dto.CreateDriverProfileRequest;
+import vn.edu.ds03.driver.dto.DriverCandidateResponse;
 import vn.edu.ds03.driver.dto.DriverProfileResponse;
 import vn.edu.ds03.driver.dto.UpdateDriverAvailabilityRequest;
 import vn.edu.ds03.driver.dto.UpdateDriverLocationRequest;
@@ -28,6 +29,7 @@ import vn.edu.ds03.driver.model.Driver;
 import vn.edu.ds03.driver.model.DriverStatus;
 import vn.edu.ds03.driver.model.Vehicle;
 import vn.edu.ds03.driver.model.VehicleType;
+import vn.edu.ds03.driver.service.DriverCandidateService;
 import vn.edu.ds03.driver.service.DriverProfileService;
 
 @SpringBootTest(
@@ -61,6 +63,9 @@ class DriverRepositoryPersistenceTest {
 
     @Autowired
     private DriverProfileService driverProfileService;
+
+    @Autowired
+    private DriverCandidateService driverCandidateService;
 
     @Autowired
     private EntityManager entityManager;
@@ -199,5 +204,40 @@ class DriverRepositoryPersistenceTest {
         assertThat(reloadedOffline.status()).isEqualTo(DriverStatus.OFFLINE);
         assertThat(reloadedOffline.acceptingTrips()).isFalse();
         assertThat(reloadedOffline.latitude()).isEqualByComparingTo("10.7768890");
+    }
+
+    @Test
+    @DisplayName("findAvailableCandidatesByVehicleType filters AVAILABLE matching vehicles and orders nearest first")
+    void findNearestCandidates_mixedDriversInDatabase_returnsOnlyAvailableMatchingVehicleSortedByDistance() {
+        createDriverWithState("user-offline-bike", "51A-100.01", VehicleType.BIKE, "10.7768890", "106.7008060", false);
+        createDriverWithState("user-avail-car", "51A-100.02", VehicleType.CAR, "10.7768890", "106.7008060", true);
+        DriverProfileResponse farBike = createDriverWithState(
+                "user-far-bike", "51A-100.03", VehicleType.BIKE, "10.8230989", "106.6296638", true);
+        DriverProfileResponse nearBike = createDriverWithState(
+                "user-near-bike", "51A-100.04", VehicleType.BIKE, "10.7770000", "106.7010000", true);
+        entityManager.clear();
+
+        java.util.List<DriverCandidateResponse> candidates = driverCandidateService.findNearestCandidates(
+                new BigDecimal("10.7768890"),
+                new BigDecimal("106.7008060"),
+                VehicleType.BIKE,
+                5);
+
+        assertThat(candidates).hasSize(2);
+        assertThat(candidates.get(0).driverId()).isEqualTo(nearBike.driverId());
+        assertThat(candidates.get(1).driverId()).isEqualTo(farBike.driverId());
+        assertThat(candidates.get(0).distanceKm()).isLessThan(candidates.get(1).distanceKm());
+    }
+
+    private DriverProfileResponse createDriverWithState(
+            String userId, String plate, VehicleType type, String lat, String lon, boolean online) {
+        DriverProfileResponse created = driverProfileService.createProfile(
+                userId, new CreateDriverProfileRequest(plate, type));
+        driverProfileService.updateLocation(
+                userId, new UpdateDriverLocationRequest(new BigDecimal(lat), new BigDecimal(lon)));
+        if (online) {
+            return driverProfileService.updateAvailability(userId, new UpdateDriverAvailabilityRequest(true));
+        }
+        return created;
     }
 }

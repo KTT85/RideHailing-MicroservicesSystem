@@ -615,7 +615,9 @@ class DriverProfileSecurityControllerTest {
                 Arguments.of("GET", "/drivers/me/location", true, 403),
                 Arguments.of("DELETE", "/drivers/me/location", true, 403),
                 Arguments.of("GET", "/drivers/me/availability", true, 403),
-                Arguments.of("DELETE", "/drivers/me/availability", true, 403));
+                Arguments.of("DELETE", "/drivers/me/availability", true, 403),
+                Arguments.of("GET", "/internal/drivers/candidates", false, 401),
+                Arguments.of("GET", "/internal/drivers/candidates", true, 401));
     }
 
     private HttpResponse<String> sendJson(String method, String path, String authHeader, String jsonBody)
