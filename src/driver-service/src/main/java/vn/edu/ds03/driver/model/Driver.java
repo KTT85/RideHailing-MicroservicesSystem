@@ -109,6 +109,22 @@ public class Driver {
         this.longitude = longitude.setScale(COORDINATE_SCALE, RoundingMode.HALF_UP);
     }
 
+    public void updateAvailability(boolean acceptingTrips) {
+        if (status == DriverStatus.RESERVED || status == DriverStatus.BUSY || currentTripId != null) {
+            throw new IllegalStateException("Cannot change availability while assigned to an active trip");
+        }
+        if (acceptingTrips) {
+            if (latitude == null || longitude == null) {
+                throw new IllegalStateException("Driver location must be set before going online");
+            }
+            this.acceptingTrips = true;
+            this.status = DriverStatus.AVAILABLE;
+            return;
+        }
+        this.acceptingTrips = false;
+        this.status = DriverStatus.OFFLINE;
+    }
+
     public String getId() {
         return id;
     }
