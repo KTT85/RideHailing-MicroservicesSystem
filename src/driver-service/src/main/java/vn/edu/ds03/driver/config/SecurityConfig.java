@@ -1,18 +1,31 @@
 package vn.edu.ds03.driver.config;
 
 import jakarta.servlet.DispatcherType;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
 import java.util.Base64;
+import java.util.List;
 import java.util.Objects;
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.oauth2.core.DelegatingOAuth2TokenValidator;
 import org.springframework.security.oauth2.core.OAuth2TokenValidator;
 import org.springframework.security.oauth2.jose.jws.MacAlgorithm;
@@ -25,13 +38,18 @@ import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
 import org.springframework.security.oauth2.server.resource.authentication.JwtGrantedAuthoritiesConverter;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
+import org.springframework.web.filter.OncePerRequestFilter;
 
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     private static final int MIN_SECRET_BYTES = 32;
+    private static final int MIN_INTERNAL_TOKEN_LENGTH = 32;
+    private static final int MAX_INTERNAL_HEADER_LENGTH = 512;
     private static final int MAX_SUBJECT_LENGTH = 36;
+    private static final String SERVICE_TOKEN_HEADER = "X-Service-Token";
 
     @Bean
     JwtDecoder jwtDecoder(
@@ -70,6 +88,30 @@ public class SecurityConfig {
     }
 
     @Bean
+    @Order(1)
+    SecurityFilterChain internalSecurityFilterChain(
+            HttpSecurity http,
+            @Value("${app.internal-token:}") String internalToken) throws Exception {
+        byte[] expectedDigest = parseInternalTokenDigest(internalToken);
+
+        return http
+                .securityMatcher("/internal/**")
+                .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .addFilterBefore(new InternalServiceTokenFilter(expectedDigest), AnonymousAuthenticationFilter.class)
+                .authorizeHttpRequests(authorize -> authorize
+                        .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
+                        .requestMatchers(HttpMethod.GET, "/internal/drivers/candidates")
+                        .hasRole("INTERNAL_SERVICE")
+                        .anyRequest().denyAll())
+                .exceptionHandling(exceptions -> exceptions
+                        .authenticationEntryPoint((req, res, ex) -> res.setStatus(HttpServletResponse.SC_UNAUTHORIZED))
+                        .accessDeniedHandler((req, res, ex) -> res.setStatus(HttpServletResponse.SC_FORBIDDEN)))
+                .build();
+    }
+
+    @Bean
+    @Order(2)
     SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         JwtGrantedAuthoritiesConverter authoritiesConverter = new JwtGrantedAuthoritiesConverter();
         authoritiesConverter.setAuthoritiesClaimName("role");
@@ -99,10 +141,62 @@ public class SecurityConfig {
                 .build();
     }
 
+    static byte[] parseInternalTokenDigest(String internalToken) {
+        if (internalToken == null || internalToken.isBlank()) {
+            return null;
+        }
+        String trimmed = internalToken.trim();
+        if (trimmed.length() < MIN_INTERNAL_TOKEN_LENGTH) {
+            throw new IllegalArgumentException(
+                    "DRIVER_INTERNAL_TOKEN must contain at least 32 characters");
+        }
+        return sha256(trimmed);
+    }
+
+    private static byte[] sha256(String value) {
+        try {
+            return MessageDigest.getInstance("SHA-256")
+                    .digest(value.getBytes(StandardCharsets.UTF_8));
+        } catch (NoSuchAlgorithmException exception) {
+            throw new IllegalStateException("SHA-256 algorithm unavailable", exception);
+        }
+    }
+
     private static boolean isValidSubject(String subject) {
         if (subject == null || subject.isBlank() || subject.length() > MAX_SUBJECT_LENGTH) {
             return false;
         }
         return subject.chars().allMatch(ch -> ch > 0x20 && ch <= 0x7E);
+    }
+
+    private static final class InternalServiceTokenFilter extends OncePerRequestFilter {
+
+        private final byte[] expectedDigest;
+
+        InternalServiceTokenFilter(byte[] expectedDigest) {
+            this.expectedDigest = expectedDigest;
+        }
+
+        @Override
+        protected void doFilterInternal(
+                HttpServletRequest request,
+                HttpServletResponse response,
+                FilterChain filterChain) throws ServletException, IOException {
+            if (expectedDigest != null) {
+                String supplied = request.getHeader(SERVICE_TOKEN_HEADER);
+                if (supplied != null
+                        && !supplied.isBlank()
+                        && supplied.length() <= MAX_INTERNAL_HEADER_LENGTH
+                        && MessageDigest.isEqual(expectedDigest, sha256(supplied.trim()))) {
+                    UsernamePasswordAuthenticationToken authentication =
+                            new UsernamePasswordAuthenticationToken(
+                                    "internal-service",
+                                    null,
+                                    List.of(new SimpleGrantedAuthority("ROLE_INTERNAL_SERVICE")));
+                    SecurityContextHolder.getContext().setAuthentication(authentication);
+                }
+            }
+            filterChain.doFilter(request, response);
+        }
     }
 }

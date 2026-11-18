@@ -7,8 +7,10 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
@@ -29,6 +31,15 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleInvalidJson(HttpMessageNotReadableException exception) {
         return ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST, "Malformed JSON or unsupported field value");
+    }
+
+    @ExceptionHandler({
+            MissingServletRequestParameterException.class,
+            MethodArgumentTypeMismatchException.class
+    })
+    public ProblemDetail handleInvalidQueryParameter(Exception exception) {
+        return ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "Missing or invalid query parameter");
     }
 
     @ExceptionHandler(ResponseStatusException.class)

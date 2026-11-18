@@ -4,6 +4,7 @@ app:
   jwt:
     secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER:ds03-user-service}
+  internal-token: ${DRIVER_INTERNAL_TOKEN:}
 spring:
   application:
     name: driver-service
