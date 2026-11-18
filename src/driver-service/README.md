@@ -82,10 +82,18 @@ All internal mutation endpoints require `X-Service-Token: <DRIVER_INTERNAL_TOKEN
 - `POST /internal/drivers/{driverId}/start`: atomically transitions `RESERVED` → `BUSY` for the matching `tripId` (idempotent on `BUSY`; `409` on state/trip mismatch).
 - `POST /internal/drivers/{driverId}/release`: atomically clears `currentTripId` and returns `RESERVED`/`BUSY` → `AVAILABLE` (or `OFFLINE` if `acceptingTrips = false`) for both trip completion and Saga compensation. Idempotent (`200 OK`) if already idle; returns `409` if holding a different active trip.
 
+## Asynchronous RabbitMQ events, idempotency, outbox & DLQ
+
+Driver Service declares durable RabbitMQ topology against the shared topic exchange `ride.events` (configurable via `DRIVER_EVENTS_EXCHANGE`):
+
+- `driver.commands`: durable consumer queue bound to `TripStarted`, `DriverReleaseRequested`, `DriverRejected`, `TripCompleted`, `TripCancelled` (plus dot-case aliases `trip.started`, `driver.release_requested`, `trip.rejected`, `trip.completed`, `trip.cancelled`), dead-lettered to `driver.dlq` via `driver.delivery`.
+- `driver.retry`: durable TTL retry queue (`DRIVER_RETRY_TTL_MS`, default `5000` ms) dead-lettering back to `driver.commands` up to `DRIVER_MAX_RETRY_ATTEMPTS` (`3`), after which transient failures escalate to `driver.dlq`. Malformed, oversized (`> 64 KB`), or domain-conflicting payloads go directly to `driver.dlq`.
+- **Idempotency & Transactional Outbox**: `processed_events` deduplicates `(consumer_name, event_id)` inside the same MySQL transaction as `drivers` state transitions and `outbox_events` (`DriverReleased`), while `DriverOutboxPublisher` publishes `DriverReleased` with correlated broker confirmation and exponential backoff (`PENDING` → `PUBLISHED` / `MANUAL_REVIEW`).
+
 ## JWT settings
 
 The service verifies HS256 tokens from User Service. It requires the same Base64 `JWT_SECRET` and `JWT_ISSUER` as User Service; the issuer defaults to `ds03-user-service`. The decoded secret must contain at least 32 bytes. Do not commit the secret.
 
 ## Database
 
-On a new MySQL volume, `docker/mysql/init/02-driver-schema.sql` creates `drivers` and `vehicles` after the database initialization script. Existing volumes are not reinitialized automatically; apply that schema through an administrator connection before using the profile API.
+On a new MySQL volume, `docker/mysql/init/02-driver-schema.sql` creates `drivers`, `vehicles`, `processed_events`, and `outbox_events` after the database initialization script. Existing volumes are not reinitialized automatically; apply that schema through an administrator connection before using the profile API.
