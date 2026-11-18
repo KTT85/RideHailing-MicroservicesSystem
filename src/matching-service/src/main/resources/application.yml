@@ -1,9 +1,28 @@
 server:
   port: ${SERVER_PORT:8080}
+app:
+  matching:
+    driver-service-url: ${DRIVER_SERVICE_URL:http://localhost:8082}
+    driver-internal-token: ${DRIVER_INTERNAL_TOKEN:}
+    candidate-limit: ${MATCHING_CANDIDATE_LIMIT:5}
+    connect-timeout-ms: ${MATCHING_CONNECT_TIMEOUT_MS:2000}
+    read-timeout-ms: ${MATCHING_READ_TIMEOUT_MS:3000}
+    events-exchange: ${MATCHING_EVENTS_EXCHANGE:ride.events}
+    retry-ttl-ms: ${MATCHING_RETRY_TTL_MS:5000}
+    max-retry-attempts: ${MATCHING_MAX_RETRY_ATTEMPTS:3}
 spring:
   application:
     name: matching-service
   rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: auto
+        prefetch: 1
+        default-requeue-rejected: false
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER}
