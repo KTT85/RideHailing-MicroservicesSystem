@@ -74,6 +74,14 @@ Transitions the driver between `OFFLINE` (`acceptingTrips = false`) and `AVAILAB
 
 `GET /internal/drivers/candidates?pickupLatitude=10.7768890&pickupLongitude=106.7008060&vehicleType=BIKE&limit=5` requires `X-Service-Token: <DRIVER_INTERNAL_TOKEN>` (`>= 32` characters; fails closed with HTTP 401 when unset or mismatched). Returns `AVAILABLE` drivers with matching `vehicleType` ordered by Haversine distance (`distanceKm`) ascending up to `limit` (`1..20`).
 
+## Internal atomic reservation & trip lifecycle (OCC & Saga compensation)
+
+All internal mutation endpoints require `X-Service-Token: <DRIVER_INTERNAL_TOKEN>` and JSON body `{"tripId": "<trip-uuid>"}`:
+
+- `POST /internal/drivers/{driverId}/reserve`: atomically transitions `AVAILABLE` → `RESERVED` with `currentTripId = tripId` via conditional compare-and-swap SQL update (`0` double-bookings under concurrent requests). Idempotent (`200 OK`) if the same `tripId` is already held by `driverId`; returns `409 Conflict` if the driver is unavailable or `tripId` is already held by another driver.
+- `POST /internal/drivers/{driverId}/start`: atomically transitions `RESERVED` → `BUSY` for the matching `tripId` (idempotent on `BUSY`; `409` on state/trip mismatch).
+- `POST /internal/drivers/{driverId}/release`: atomically clears `currentTripId` and returns `RESERVED`/`BUSY` → `AVAILABLE` (or `OFFLINE` if `acceptingTrips = false`) for both trip completion and Saga compensation. Idempotent (`200 OK`) if already idle; returns `409` if holding a different active trip.
+
 ## JWT settings
 
 The service verifies HS256 tokens from User Service. It requires the same Base64 `JWT_SECRET` and `JWT_ISSUER` as User Service; the issuer defaults to `ds03-user-service`. The decoded secret must contain at least 32 bytes. Do not commit the secret.
