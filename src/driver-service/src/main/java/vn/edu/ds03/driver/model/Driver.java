@@ -13,6 +13,7 @@ import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
@@ -26,6 +27,14 @@ import java.util.UUID;
         },
         indexes = @Index(name = "idx_drivers_status_accepting", columnList = "status, accepting_trips"))
 public class Driver {
+
+    private static final BigDecimal MIN_LATITUDE = new BigDecimal("-90");
+    private static final BigDecimal MAX_LATITUDE = new BigDecimal("90");
+    private static final BigDecimal MIN_LONGITUDE = new BigDecimal("-180");
+    private static final BigDecimal MAX_LONGITUDE = new BigDecimal("180");
+    private static final int COORDINATE_SCALE = 7;
+    private static final int MAX_INPUT_SCALE = 20;
+
     @Id
     @Column(name = "id", nullable = false, length = 36, columnDefinition = "CHAR(36)")
     private String id;
@@ -80,6 +89,24 @@ public class Driver {
         }
         this.vehicle = vehicle;
         vehicle.attachTo(this);
+    }
+
+    public void updateLocation(BigDecimal latitude, BigDecimal longitude) {
+        if (latitude == null || longitude == null) {
+            throw new IllegalArgumentException("Latitude and longitude are required");
+        }
+        if (Math.abs((long) latitude.scale()) > MAX_INPUT_SCALE
+                || Math.abs((long) longitude.scale()) > MAX_INPUT_SCALE) {
+            throw new IllegalArgumentException("Coordinate scale exceeds supported precision");
+        }
+        if (latitude.compareTo(MIN_LATITUDE) < 0 || latitude.compareTo(MAX_LATITUDE) > 0) {
+            throw new IllegalArgumentException("Latitude must be between -90 and 90");
+        }
+        if (longitude.compareTo(MIN_LONGITUDE) < 0 || longitude.compareTo(MAX_LONGITUDE) > 0) {
+            throw new IllegalArgumentException("Longitude must be between -180 and 180");
+        }
+        this.latitude = latitude.setScale(COORDINATE_SCALE, RoundingMode.HALF_UP);
+        this.longitude = longitude.setScale(COORDINATE_SCALE, RoundingMode.HALF_UP);
     }
 
     public String getId() {

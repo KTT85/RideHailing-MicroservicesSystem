@@ -10,6 +10,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 import vn.edu.ds03.driver.dto.CreateDriverProfileRequest;
 import vn.edu.ds03.driver.dto.DriverProfileResponse;
+import vn.edu.ds03.driver.dto.UpdateDriverLocationRequest;
 import vn.edu.ds03.driver.model.Driver;
 import vn.edu.ds03.driver.model.Vehicle;
 import vn.edu.ds03.driver.repository.DriverRepository;
@@ -53,6 +54,17 @@ public class DriverProfileService {
                 .map(DriverProfileResponse::from)
                 .orElseThrow(() -> new ResponseStatusException(
                         HttpStatus.NOT_FOUND, "Driver profile not found"));
+    }
+
+    @Transactional
+    public DriverProfileResponse updateLocation(String userId, UpdateDriverLocationRequest request) {
+        String normalizedUserId = normalizeAndValidateUserId(userId);
+        Driver driver = driverRepository.findWithVehicleByUserId(normalizedUserId)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Driver profile not found"));
+        driver.updateLocation(request.latitude(), request.longitude());
+        Driver saved = driverRepository.saveAndFlush(driver);
+        return DriverProfileResponse.from(saved);
     }
 
     private static String normalizeAndValidateUserId(String userId) {

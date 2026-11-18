@@ -6,12 +6,14 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import vn.edu.ds03.driver.dto.CreateDriverProfileRequest;
 import vn.edu.ds03.driver.dto.DriverProfileResponse;
+import vn.edu.ds03.driver.dto.UpdateDriverLocationRequest;
 import vn.edu.ds03.driver.service.DriverProfileService;
 
 @RestController
@@ -35,5 +37,12 @@ public class DriverProfileController {
     @GetMapping("/me")
     public DriverProfileResponse getMyProfile(@AuthenticationPrincipal Jwt jwt) {
         return driverProfileService.getCurrentProfile(jwt.getSubject());
+    }
+
+    @PutMapping("/me/location")
+    public DriverProfileResponse updateMyLocation(
+            @AuthenticationPrincipal Jwt jwt,
+            @Valid @RequestBody UpdateDriverLocationRequest request) {
+        return driverProfileService.updateLocation(jwt.getSubject(), request);
     }
 }
