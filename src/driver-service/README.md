@@ -45,6 +45,19 @@ An existing profile for the same user or an already registered license plate ret
 
 `GET /drivers/me` requires a valid User Service JWT with role `DRIVER` and returns the authenticated driver's profile, status, coordinates, active trip reference, and vehicle in HTTP 200. If the authenticated account has not created a driver profile yet, it returns HTTP 404 (`ProblemDetail`).
 
+## Update driver GPS location
+
+`PUT /drivers/me/location` requires a valid User Service JWT with role `DRIVER`.
+
+```json
+{
+  "latitude": 10.7626224,
+  "longitude": 106.6601724
+}
+```
+
+Both `latitude` (`[-90, 90]`) and `longitude` (`[-180, 180]`) are required and normalized to 7 decimal places (`DECIMAL(10,7)`). Returns HTTP 200 with the updated profile, HTTP 400 if coordinates are missing or out of bounds, or HTTP 404 if the driver profile does not exist.
+
 ## JWT settings
 
 The service verifies HS256 tokens from User Service. It requires the same Base64 `JWT_SECRET` and `JWT_ISSUER` as User Service; the issuer defaults to `ds03-user-service`. The decoded secret must contain at least 32 bytes. Do not commit the secret.
