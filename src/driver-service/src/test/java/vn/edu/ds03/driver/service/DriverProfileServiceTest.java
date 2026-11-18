@@ -28,6 +28,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 import vn.edu.ds03.driver.dto.CreateDriverProfileRequest;
 import vn.edu.ds03.driver.dto.DriverProfileResponse;
+import vn.edu.ds03.driver.dto.UpdateDriverAvailabilityRequest;
 import vn.edu.ds03.driver.dto.UpdateDriverLocationRequest;
 import vn.edu.ds03.driver.model.Driver;
 import vn.edu.ds03.driver.model.DriverStatus;
@@ -256,6 +257,87 @@ class DriverProfileServiceTest {
         assertThatThrownBy(() -> driverProfileService.updateLocation(invalidUserId, request))
                 .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
                 .satisfies(statusEx -> assertThat(statusEx.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+
+        verifyNoMoreInteractions(driverRepository);
+    }
+
+    @Test
+    @DisplayName("updateAvailability enables and disables trip acceptance when driver has valid coordinates")
+    void updateAvailability_withValidCoordinates_togglesStatusAndSaves() {
+        Driver driver = new Driver(NORMALIZED_USER_ID);
+        Vehicle vehicle = new Vehicle("51a-123.45", VehicleType.BIKE);
+        driver.attachVehicle(vehicle);
+        driver.updateLocation(new BigDecimal("10.7626220"), new BigDecimal("106.6601720"));
+        ReflectionTestUtils.setField(driver, "id", "driver-avail-1");
+        ReflectionTestUtils.setField(vehicle, "id", "vehicle-avail-1");
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+                .thenReturn(Optional.of(driver));
+        when(driverRepository.saveAndFlush(driver)).thenReturn(driver);
+
+        DriverProfileResponse online = driverProfileService.updateAvailability(
+                MIXED_CASE_USER_ID, new UpdateDriverAvailabilityRequest(true));
+        assertThat(online.status()).isEqualTo(DriverStatus.AVAILABLE);
+        assertThat(online.acceptingTrips()).isTrue();
+
+        DriverProfileResponse offline = driverProfileService.updateAvailability(
+                MIXED_CASE_USER_ID, new UpdateDriverAvailabilityRequest(false));
+        assertThat(offline.status()).isEqualTo(DriverStatus.OFFLINE);
+        assertThat(offline.acceptingTrips()).isFalse();
+    }
+
+    @Test
+    @DisplayName("updateAvailability translates missing coordinates or active trip state into 409 Conflict")
+    void updateAvailability_missingCoordinatesOrActiveTrip_throwsConflictWithoutSaving() {
+        Driver noLocationDriver = new Driver(NORMALIZED_USER_ID);
+        noLocationDriver.attachVehicle(new Vehicle("51a-123.45", VehicleType.BIKE));
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+                .thenReturn(Optional.of(noLocationDriver));
+
+        assertThatThrownBy(() -> driverProfileService.updateAvailability(
+                MIXED_CASE_USER_ID, new UpdateDriverAvailabilityRequest(true)))
+                .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                .satisfies(ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+
+        Driver busyDriver = new Driver(NORMALIZED_USER_ID);
+        busyDriver.attachVehicle(new Vehicle("51a-123.45", VehicleType.BIKE));
+        busyDriver.updateLocation(new BigDecimal("10.7626220"), new BigDecimal("106.6601720"));
+        ReflectionTestUtils.setField(busyDriver, "status", DriverStatus.BUSY);
+        ReflectionTestUtils.setField(busyDriver, "acceptingTrips", true);
+        ReflectionTestUtils.setField(busyDriver, "currentTripId", "trip-999");
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+                .thenReturn(Optional.of(busyDriver));
+
+        assertThatThrownBy(() -> driverProfileService.updateAvailability(
+                MIXED_CASE_USER_ID, new UpdateDriverAvailabilityRequest(false)))
+                .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                .satisfies(ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+
+        verify(driverRepository, never()).saveAndFlush(any(Driver.class));
+    }
+
+    @Test
+    @DisplayName("updateAvailability throws 404 Not Found when driver profile does not exist")
+    void updateAvailability_missingDriver_throwsNotFoundWithoutSaving() {
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+                .thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> driverProfileService.updateAvailability(
+                MIXED_CASE_USER_ID, new UpdateDriverAvailabilityRequest(true)))
+                .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                .satisfies(ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND));
+
+        verify(driverRepository, never()).saveAndFlush(any(Driver.class));
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = "   ")
+    @DisplayName("updateAvailability throws 401 Unauthorized when userId subject is null or blank")
+    void updateAvailability_nullOrBlankUserId_throwsUnauthorizedWithoutCallingRepository(String invalidUserId) {
+        assertThatThrownBy(() -> driverProfileService.updateAvailability(
+                invalidUserId, new UpdateDriverAvailabilityRequest(true)))
+                .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                .satisfies(ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
 
         verifyNoMoreInteractions(driverRepository);
     }

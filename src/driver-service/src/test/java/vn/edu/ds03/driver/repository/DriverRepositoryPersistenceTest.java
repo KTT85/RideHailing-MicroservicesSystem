@@ -22,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 import vn.edu.ds03.driver.DriverServiceApplication;
 import vn.edu.ds03.driver.dto.CreateDriverProfileRequest;
 import vn.edu.ds03.driver.dto.DriverProfileResponse;
+import vn.edu.ds03.driver.dto.UpdateDriverAvailabilityRequest;
 import vn.edu.ds03.driver.dto.UpdateDriverLocationRequest;
 import vn.edu.ds03.driver.model.Driver;
 import vn.edu.ds03.driver.model.DriverStatus;
@@ -164,5 +165,39 @@ class DriverRepositoryPersistenceTest {
         assertThat(reloaded.latitude()).isEqualByComparingTo("10.7626224");
         assertThat(reloaded.longitude()).isEqualByComparingTo("106.6601724");
         assertThat(reloaded.status()).isEqualTo(DriverStatus.OFFLINE);
+    }
+
+    @Test
+    @DisplayName("updateAvailability enforces coordinates before going AVAILABLE and persists OFFLINE <-> AVAILABLE transitions")
+    void updateAvailability_lifecycleWithDatabase_enforcesCoordinatesAndPersistsTransitions() {
+        String userId = "88888888-2222-3333-4444-555555555555";
+        driverProfileService.createProfile(userId, new CreateDriverProfileRequest("51m-888.99", VehicleType.CAR));
+
+        assertThatThrownBy(() -> driverProfileService.updateAvailability(
+                userId, new UpdateDriverAvailabilityRequest(true)))
+                .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                .satisfies(ex -> assertThat(ex.getStatusCode()).isEqualTo(HttpStatus.CONFLICT));
+
+        driverProfileService.updateLocation(
+                userId,
+                new UpdateDriverLocationRequest(
+                        new BigDecimal("10.7768890"),
+                        new BigDecimal("106.7008060")));
+
+        DriverProfileResponse online = driverProfileService.updateAvailability(
+                userId, new UpdateDriverAvailabilityRequest(true));
+        entityManager.clear();
+        assertThat(online.status()).isEqualTo(DriverStatus.AVAILABLE);
+        assertThat(online.acceptingTrips()).isTrue();
+        assertThat(driverProfileService.getCurrentProfile(userId).status()).isEqualTo(DriverStatus.AVAILABLE);
+
+        DriverProfileResponse offline = driverProfileService.updateAvailability(
+                userId, new UpdateDriverAvailabilityRequest(false));
+        entityManager.clear();
+        DriverProfileResponse reloadedOffline = driverProfileService.getCurrentProfile(userId);
+        assertThat(offline.status()).isEqualTo(DriverStatus.OFFLINE);
+        assertThat(reloadedOffline.status()).isEqualTo(DriverStatus.OFFLINE);
+        assertThat(reloadedOffline.acceptingTrips()).isFalse();
+        assertThat(reloadedOffline.latitude()).isEqualByComparingTo("10.7768890");
     }
 }

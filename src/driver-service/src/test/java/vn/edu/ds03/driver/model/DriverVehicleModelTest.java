@@ -14,6 +14,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.springframework.test.util.ReflectionTestUtils;
 
 class DriverVehicleModelTest {
 
@@ -133,5 +134,61 @@ class DriverVehicleModelTest {
                 Arguments.of(new BigDecimal("1E+100000"), new BigDecimal("106.0")),
                 Arguments.of(new BigDecimal("1E-500000000"), new BigDecimal("106.0")),
                 Arguments.of(new BigDecimal("10.0"), new BigDecimal("1E-500000000")));
+    }
+
+    @Test
+    @DisplayName("updateAvailability switches OFFLINE <-> AVAILABLE when coordinates exist and preserves coordinates")
+    void updateAvailability_withCoordinates_switchesBetweenAvailableAndOffline() {
+        Driver driver = new Driver("user-123");
+        driver.updateLocation(new BigDecimal("10.7626220"), new BigDecimal("106.6601720"));
+
+        driver.updateAvailability(true);
+        assertThat(driver.getStatus()).isEqualTo(DriverStatus.AVAILABLE);
+        assertThat(driver.isAcceptingTrips()).isTrue();
+
+        driver.updateAvailability(true);
+        assertThat(driver.getStatus()).isEqualTo(DriverStatus.AVAILABLE);
+        assertThat(driver.isAcceptingTrips()).isTrue();
+
+        driver.updateAvailability(false);
+        assertThat(driver.getStatus()).isEqualTo(DriverStatus.OFFLINE);
+        assertThat(driver.isAcceptingTrips()).isFalse();
+        assertThat(driver.getLatitude()).isEqualByComparingTo("10.7626220");
+        assertThat(driver.getLongitude()).isEqualByComparingTo("106.6601720");
+    }
+
+    @Test
+    @DisplayName("updateAvailability rejects going online when coordinates have not been set")
+    void updateAvailability_trueWithoutCoordinates_throwsIllegalStateAndRemainsOffline() {
+        Driver driver = new Driver("user-123");
+
+        assertThatThrownBy(() -> driver.updateAvailability(true))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("location");
+
+        assertThat(driver.getStatus()).isEqualTo(DriverStatus.OFFLINE);
+        assertThat(driver.isAcceptingTrips()).isFalse();
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = DriverStatus.class, names = {"RESERVED", "BUSY"})
+    @DisplayName("updateAvailability rejects changes when driver is RESERVED or BUSY on an active trip")
+    void updateAvailability_activeTripStates_throwsIllegalStateWithoutMutatingState(DriverStatus activeStatus) {
+        Driver driver = new Driver("user-123");
+        driver.updateLocation(new BigDecimal("10.7626220"), new BigDecimal("106.6601720"));
+        ReflectionTestUtils.setField(driver, "status", activeStatus);
+        ReflectionTestUtils.setField(driver, "acceptingTrips", true);
+        ReflectionTestUtils.setField(driver, "currentTripId", "trip-123");
+
+        assertThatThrownBy(() -> driver.updateAvailability(false))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("active trip");
+        assertThatThrownBy(() -> driver.updateAvailability(true))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("active trip");
+
+        assertThat(driver.getStatus()).isEqualTo(activeStatus);
+        assertThat(driver.isAcceptingTrips()).isTrue();
+        assertThat(driver.getCurrentTripId()).isEqualTo("trip-123");
     }
 }

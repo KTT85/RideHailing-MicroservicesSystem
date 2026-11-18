@@ -46,6 +46,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 import vn.edu.ds03.driver.DriverServiceApplication;
 import vn.edu.ds03.driver.model.Driver;
+import vn.edu.ds03.driver.model.DriverStatus;
 import vn.edu.ds03.driver.model.Vehicle;
 import vn.edu.ds03.driver.model.VehicleType;
 import vn.edu.ds03.driver.repository.DriverRepository;
@@ -462,6 +463,114 @@ class DriverProfileSecurityControllerTest {
     }
 
     @Test
+    @DisplayName("PATCH /drivers/me/availability toggles AVAILABLE and OFFLINE when coordinates exist")
+    void updateMyAvailability_validDriverWithCoordinates_togglesAvailableAndOffline() throws Exception {
+        Driver driver = new Driver(NORMALIZED_DRIVER_USER_ID);
+        Vehicle vehicle = new Vehicle("51a-123.45", VehicleType.BIKE);
+        driver.attachVehicle(vehicle);
+        driver.updateLocation(new BigDecimal("10.7626220"), new BigDecimal("106.6601720"));
+        ReflectionTestUtils.setField(driver, "id", "driver-avail-1");
+        ReflectionTestUtils.setField(vehicle, "id", "vehicle-avail-1");
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+                .thenReturn(Optional.of(driver));
+        when(driverRepository.saveAndFlush(driver)).thenReturn(driver);
+
+        String token = issueToken(ISSUER, MIXED_CASE_DRIVER_USER_ID, "DRIVER", Instant.now().plusSeconds(3600));
+
+        HttpResponse<String> onlineResp = sendJson(
+                "PATCH",
+                "/drivers/me/availability?userId=spoofed",
+                "Bearer " + token,
+                "{\"userId\":\"spoofed\",\"acceptingTrips\":true}");
+        assertThat(onlineResp.statusCode()).isEqualTo(200);
+        JsonNode onlineJson = JSON_MAPPER.readTree(onlineResp.body());
+        assertThat(onlineJson.get("status").asString()).isEqualTo("AVAILABLE");
+        assertThat(onlineJson.get("acceptingTrips").asBoolean()).isTrue();
+
+        HttpResponse<String> offlineResp = sendJson(
+                "PATCH",
+                "/drivers/me/availability",
+                "Bearer " + token,
+                "{\"acceptingTrips\":false}");
+        assertThat(offlineResp.statusCode()).isEqualTo(200);
+        JsonNode offlineJson = JSON_MAPPER.readTree(offlineResp.body());
+        assertThat(offlineJson.get("status").asString()).isEqualTo("OFFLINE");
+        assertThat(offlineJson.get("acceptingTrips").asBoolean()).isFalse();
+    }
+
+    @Test
+    @DisplayName("PATCH /drivers/me/availability returns 409 ProblemDetail when coordinates are missing or driver is on active trip")
+    void updateMyAvailability_missingCoordinatesOrActiveTrip_returns409ProblemDetail() throws Exception {
+        String token = issueToken(ISSUER, MIXED_CASE_DRIVER_USER_ID, "DRIVER", Instant.now().plusSeconds(3600));
+
+        Driver noLocationDriver = new Driver(NORMALIZED_DRIVER_USER_ID);
+        noLocationDriver.attachVehicle(new Vehicle("51a-123.45", VehicleType.BIKE));
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+                .thenReturn(Optional.of(noLocationDriver));
+
+        HttpResponse<String> noLocResp = sendJson(
+                "PATCH", "/drivers/me/availability", "Bearer " + token, "{\"acceptingTrips\":true}");
+        assertThat(noLocResp.statusCode()).isEqualTo(409);
+        assertThat(JSON_MAPPER.readTree(noLocResp.body()).get("status").asInt()).isEqualTo(409);
+
+        Driver reservedDriver = new Driver(NORMALIZED_DRIVER_USER_ID);
+        reservedDriver.attachVehicle(new Vehicle("51a-123.45", VehicleType.BIKE));
+        reservedDriver.updateLocation(new BigDecimal("10.7626220"), new BigDecimal("106.6601720"));
+        ReflectionTestUtils.setField(reservedDriver, "status", DriverStatus.RESERVED);
+        ReflectionTestUtils.setField(reservedDriver, "acceptingTrips", true);
+        ReflectionTestUtils.setField(reservedDriver, "currentTripId", "trip-1");
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+                .thenReturn(Optional.of(reservedDriver));
+
+        HttpResponse<String> activeTripResp = sendJson(
+                "PATCH", "/drivers/me/availability", "Bearer " + token, "{\"acceptingTrips\":false}");
+        assertThat(activeTripResp.statusCode()).isEqualTo(409);
+        assertThat(JSON_MAPPER.readTree(activeTripResp.body()).get("status").asInt()).isEqualTo(409);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "",
+            "{}",
+            "{",
+            "{\"acceptingTrips\":null}",
+            "{\"acceptingTrips\":\"not-a-boolean\"}"
+    })
+    @DisplayName("PATCH /drivers/me/availability returns 400 ProblemDetail for missing or malformed acceptingTrips")
+    void updateMyAvailability_invalidPayloads_returns400ProblemDetailWithoutCallingRepository(String invalidJson)
+            throws Exception {
+        String token = issueToken(ISSUER, MIXED_CASE_DRIVER_USER_ID, "DRIVER", Instant.now().plusSeconds(3600));
+
+        HttpResponse<String> response = sendJson("PATCH", "/drivers/me/availability", "Bearer " + token, invalidJson);
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body()).doesNotContain("vn.edu.ds03");
+        assertThat(JSON_MAPPER.readTree(response.body()).get("status").asInt()).isEqualTo(400);
+        verifyNoInteractions(driverRepository);
+    }
+
+    @Test
+    @DisplayName("PATCH /drivers/me/availability returns 404 when profile is missing and enforces 401/403")
+    void updateMyAvailability_missingProfileOrUnauthorized_returnsExpectedStatus() throws Exception {
+        String body = "{\"acceptingTrips\":true}";
+        assertThat(sendJson("PATCH", "/drivers/me/availability", null, body).statusCode()).isEqualTo(401);
+
+        String passengerToken = issueToken(
+                ISSUER, MIXED_CASE_DRIVER_USER_ID, "PASSENGER", Instant.now().plusSeconds(3600));
+        assertThat(sendJson("PATCH", "/drivers/me/availability", "Bearer " + passengerToken, body).statusCode())
+                .isEqualTo(403);
+        verifyNoInteractions(driverRepository);
+
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+                .thenReturn(Optional.empty());
+        String driverToken = issueToken(
+                ISSUER, MIXED_CASE_DRIVER_USER_ID, "DRIVER", Instant.now().plusSeconds(3600));
+        HttpResponse<String> notFoundResp = sendJson(
+                "PATCH", "/drivers/me/availability", "Bearer " + driverToken, body);
+        assertThat(notFoundResp.statusCode()).isEqualTo(404);
+    }
+
+    @Test
     @DisplayName("Real Spring Boot Actuator health and info endpoints are public and hide internal details")
     void actuatorHealthAndInfo_withoutJwt_return200WithoutComponentDetails() throws Exception {
         HttpResponse<String> healthResponse = sendRequest("GET", "/actuator/health", null);
@@ -497,12 +606,16 @@ class DriverProfileSecurityControllerTest {
                 Arguments.of("DELETE", "/drivers/me", false, 401),
                 Arguments.of("GET", "/drivers/me/location", false, 401),
                 Arguments.of("DELETE", "/drivers/me/location", false, 401),
+                Arguments.of("GET", "/drivers/me/availability", false, 401),
+                Arguments.of("DELETE", "/drivers/me/availability", false, 401),
                 Arguments.of("GET", "/actuator/env", true, 403),
                 Arguments.of("GET", "/drivers/profile", true, 403),
                 Arguments.of("DELETE", "/drivers/profile", true, 403),
                 Arguments.of("DELETE", "/drivers/me", true, 403),
                 Arguments.of("GET", "/drivers/me/location", true, 403),
-                Arguments.of("DELETE", "/drivers/me/location", true, 403));
+                Arguments.of("DELETE", "/drivers/me/location", true, 403),
+                Arguments.of("GET", "/drivers/me/availability", true, 403),
+                Arguments.of("DELETE", "/drivers/me/availability", true, 403));
     }
 
     private HttpResponse<String> sendJson(String method, String path, String authHeader, String jsonBody)
