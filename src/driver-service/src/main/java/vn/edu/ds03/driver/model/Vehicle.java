@@ -61,6 +61,10 @@ public class Vehicle {
         this.driver = driver;
     }
 
+    void detach() {
+        this.driver = null;
+    }
+
     public String getId() {
         return id;
     }

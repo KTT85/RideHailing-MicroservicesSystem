@@ -14,6 +14,7 @@ import jakarta.persistence.Table;
 import jakarta.persistence.UniqueConstraint;
 import java.math.BigDecimal;
 import java.util.Locale;
+import java.util.Objects;
 import java.util.UUID;
 
 @Entity
@@ -48,7 +49,12 @@ public class Driver {
     @Column(name = "longitude", precision = 10, scale = 7)
     private BigDecimal longitude;
 
-    @OneToOne(mappedBy = "driver", fetch = FetchType.LAZY, cascade = CascadeType.PERSIST, optional = false)
+    @OneToOne(
+            mappedBy = "driver",
+            fetch = FetchType.LAZY,
+            cascade = CascadeType.ALL,
+            orphanRemoval = true,
+            optional = false)
     private Vehicle vehicle;
 
     protected Driver() {
@@ -68,6 +74,10 @@ public class Driver {
     }
 
     public void attachVehicle(Vehicle vehicle) {
+        Objects.requireNonNull(vehicle, "vehicle must not be null");
+        if (this.vehicle != null && this.vehicle != vehicle) {
+            this.vehicle.detach();
+        }
         this.vehicle = vehicle;
         vehicle.attachTo(this);
     }
