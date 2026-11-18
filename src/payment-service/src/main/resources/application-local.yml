@@ -1,0 +1,7 @@
+# Run with SPRING_PROFILES_ACTIVE=local, matching the User service workflow.
+server:
+  port: ${SERVER_PORT:8085}
+spring:
+  rabbitmq:
+    username: ${RABBITMQ_USER:guest}
+    password: ${RABBITMQ_PASSWORD:guest}
