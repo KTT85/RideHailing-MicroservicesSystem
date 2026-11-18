@@ -28,6 +28,7 @@ import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.server.ResponseStatusException;
 import vn.edu.ds03.driver.dto.CreateDriverProfileRequest;
 import vn.edu.ds03.driver.dto.DriverProfileResponse;
+import vn.edu.ds03.driver.dto.UpdateDriverLocationRequest;
 import vn.edu.ds03.driver.model.Driver;
 import vn.edu.ds03.driver.model.DriverStatus;
 import vn.edu.ds03.driver.model.Vehicle;
@@ -194,6 +195,65 @@ class DriverProfileServiceTest {
     @DisplayName("getCurrentProfile throws 401 Unauthorized when userId subject is null or blank")
     void getCurrentProfile_nullOrBlankUserId_throwsUnauthorizedWithoutCallingRepository(String invalidUserId) {
         assertThatThrownBy(() -> driverProfileService.getCurrentProfile(invalidUserId))
+                .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                .satisfies(statusEx -> assertThat(statusEx.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
+
+        verifyNoMoreInteractions(driverRepository);
+    }
+
+    @Test
+    @DisplayName("updateLocation normalizes userId, updates coordinates to 7 decimals, saves, and returns profile")
+    void updateLocation_existingDriver_updatesCoordinatesSavesAndReturnsProfile() {
+        Driver driver = new Driver(NORMALIZED_USER_ID);
+        Vehicle vehicle = new Vehicle("51a-123.45", VehicleType.BIKE);
+        driver.attachVehicle(vehicle);
+        ReflectionTestUtils.setField(driver, "id", "driver-loc-1");
+        ReflectionTestUtils.setField(vehicle, "id", "vehicle-loc-1");
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+                .thenReturn(Optional.of(driver));
+        when(driverRepository.saveAndFlush(driver)).thenReturn(driver);
+
+        UpdateDriverLocationRequest request = new UpdateDriverLocationRequest(
+                new BigDecimal("10.77584391"), new BigDecimal("106.70175554"));
+        DriverProfileResponse response = driverProfileService.updateLocation(MIXED_CASE_USER_ID, request);
+
+        assertThat(response.driverId()).isEqualTo("driver-loc-1");
+        assertThat(response.latitude()).isEqualTo(new BigDecimal("10.7758439"));
+        assertThat(response.longitude()).isEqualTo(new BigDecimal("106.7017555"));
+        verify(driverRepository).findWithVehicleByUserId(NORMALIZED_USER_ID);
+        verify(driverRepository).saveAndFlush(driver);
+        verifyNoMoreInteractions(driverRepository);
+    }
+
+    @Test
+    @DisplayName("updateLocation throws 404 Not Found when driver profile does not exist")
+    void updateLocation_missingDriver_throwsNotFoundWithoutSaving() {
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_USER_ID))
+                .thenReturn(Optional.empty());
+        UpdateDriverLocationRequest request = new UpdateDriverLocationRequest(
+                new BigDecimal("10.7758439"), new BigDecimal("106.7017555"));
+
+        assertThatThrownBy(() -> driverProfileService.updateLocation(MIXED_CASE_USER_ID, request))
+                .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
+                .satisfies(statusEx -> {
+                    assertThat(statusEx.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+                    assertThat(statusEx.getReason()).isEqualTo("Driver profile not found");
+                });
+
+        verify(driverRepository).findWithVehicleByUserId(NORMALIZED_USER_ID);
+        verify(driverRepository, never()).saveAndFlush(any(Driver.class));
+        verifyNoMoreInteractions(driverRepository);
+    }
+
+    @ParameterizedTest
+    @NullAndEmptySource
+    @ValueSource(strings = "   ")
+    @DisplayName("updateLocation throws 401 Unauthorized when userId subject is null or blank")
+    void updateLocation_nullOrBlankUserId_throwsUnauthorizedWithoutCallingRepository(String invalidUserId) {
+        UpdateDriverLocationRequest request = new UpdateDriverLocationRequest(
+                new BigDecimal("10.7758439"), new BigDecimal("106.7017555"));
+
+        assertThatThrownBy(() -> driverProfileService.updateLocation(invalidUserId, request))
                 .asInstanceOf(InstanceOfAssertFactories.type(ResponseStatusException.class))
                 .satisfies(statusEx -> assertThat(statusEx.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED));
 

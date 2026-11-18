@@ -364,6 +364,104 @@ class DriverProfileSecurityControllerTest {
     }
 
     @Test
+    @DisplayName("PUT /drivers/me/location returns 200 OK with scaled coordinates and ignores spoofed userId")
+    void updateMyLocation_validDriverJwtAndCoordinates_returns200WithUpdatedLocation() throws Exception {
+        Driver driver = new Driver(NORMALIZED_DRIVER_USER_ID);
+        Vehicle vehicle = new Vehicle("51a-123.45", VehicleType.BIKE);
+        driver.attachVehicle(vehicle);
+        ReflectionTestUtils.setField(driver, "id", "driver-loc-1");
+        ReflectionTestUtils.setField(vehicle, "id", "vehicle-loc-1");
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+                .thenReturn(Optional.of(driver));
+        when(driverRepository.saveAndFlush(driver)).thenReturn(driver);
+
+        String token = issueToken(ISSUER, MIXED_CASE_DRIVER_USER_ID, "DRIVER", Instant.now().plusSeconds(3600));
+        String payload = """
+                {"userId":"spoofed-user","latitude":10.76262236,"longitude":106.66017244}
+                """;
+
+        HttpResponse<String> response = sendJson(
+                "PUT", "/drivers/me/location?userId=spoofed-query", "Bearer " + token, payload);
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        JsonNode json = JSON_MAPPER.readTree(response.body());
+        assertThat(json.get("driverId").asString()).isEqualTo("driver-loc-1");
+        assertThat(json.get("userId").asString()).isEqualTo(NORMALIZED_DRIVER_USER_ID);
+        assertThat(json.get("latitude").decimalValue()).isEqualByComparingTo("10.7626224");
+        assertThat(json.get("longitude").decimalValue()).isEqualByComparingTo("106.6601724");
+        verify(driverRepository).findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID);
+        verify(driverRepository).saveAndFlush(driver);
+        verifyNoMoreInteractions(driverRepository);
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {
+            "",
+            "{}",
+            "{",
+            "{\"latitude\":10.76}",
+            "{\"longitude\":106.66}",
+            "{\"latitude\":null,\"longitude\":106.66}",
+            "{\"latitude\":10.76,\"longitude\":null}",
+            "{\"latitude\":-90.0001,\"longitude\":106.66}",
+            "{\"latitude\":90.0001,\"longitude\":106.66}",
+            "{\"latitude\":10.76,\"longitude\":-180.0001}",
+            "{\"latitude\":10.76,\"longitude\":180.0001}",
+            "{\"latitude\":1E-500000000,\"longitude\":106.66}",
+            "{\"latitude\":10.76,\"longitude\":1E-500000000}",
+            "{\"latitude\":1E+100000,\"longitude\":106.66}",
+            "{\"latitude\":\"abc\",\"longitude\":106.66}"
+    })
+    @DisplayName("PUT /drivers/me/location returns 400 ProblemDetail when coordinates are missing or out of range")
+    void updateMyLocation_invalidPayloads_returns400ProblemDetailWithoutCallingRepository(String invalidJson)
+            throws Exception {
+        String token = issueToken(ISSUER, MIXED_CASE_DRIVER_USER_ID, "DRIVER", Instant.now().plusSeconds(3600));
+
+        HttpResponse<String> response = sendJson("PUT", "/drivers/me/location", "Bearer " + token, invalidJson);
+
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(response.body())
+                .doesNotContain("vn.edu.ds03")
+                .doesNotContain("BigDecimal");
+        JsonNode problem = JSON_MAPPER.readTree(response.body());
+        assertThat(problem.get("status").asInt()).isEqualTo(400);
+        assertThat(problem.get("detail").asString()).isNotBlank();
+        verifyNoInteractions(driverRepository);
+    }
+
+    @Test
+    @DisplayName("PUT /drivers/me/location returns 404 ProblemDetail when driver profile does not exist")
+    void updateMyLocation_missingProfile_returns404ProblemDetail() throws Exception {
+        when(driverRepository.findWithVehicleByUserId(NORMALIZED_DRIVER_USER_ID))
+                .thenReturn(Optional.empty());
+        String token = issueToken(ISSUER, MIXED_CASE_DRIVER_USER_ID, "DRIVER", Instant.now().plusSeconds(3600));
+
+        HttpResponse<String> response = sendJson(
+                "PUT",
+                "/drivers/me/location",
+                "Bearer " + token,
+                "{\"latitude\":10.7626220,\"longitude\":106.6601720}");
+
+        assertThat(response.statusCode()).isEqualTo(404);
+        JsonNode problem = JSON_MAPPER.readTree(response.body());
+        assertThat(problem.get("status").asInt()).isEqualTo(404);
+        assertThat(problem.get("detail").asString()).isEqualTo("Driver profile not found");
+    }
+
+    @Test
+    @DisplayName("PUT /drivers/me/location enforces 401 when anonymous and 403 when role is not DRIVER")
+    void updateMyLocation_anonymousOrNonDriverRole_returns401Or403() throws Exception {
+        String body = "{\"latitude\":10.7626220,\"longitude\":106.6601720}";
+        assertThat(sendJson("PUT", "/drivers/me/location", null, body).statusCode()).isEqualTo(401);
+
+        String passengerToken = issueToken(
+                ISSUER, MIXED_CASE_DRIVER_USER_ID, "PASSENGER", Instant.now().plusSeconds(3600));
+        assertThat(sendJson("PUT", "/drivers/me/location", "Bearer " + passengerToken, body).statusCode())
+                .isEqualTo(403);
+        verifyNoInteractions(driverRepository);
+    }
+
+    @Test
     @DisplayName("Real Spring Boot Actuator health and info endpoints are public and hide internal details")
     void actuatorHealthAndInfo_withoutJwt_return200WithoutComponentDetails() throws Exception {
         HttpResponse<String> healthResponse = sendRequest("GET", "/actuator/health", null);
@@ -397,10 +495,14 @@ class DriverProfileSecurityControllerTest {
                 Arguments.of("GET", "/drivers/profile", false, 401),
                 Arguments.of("DELETE", "/drivers/profile", false, 401),
                 Arguments.of("DELETE", "/drivers/me", false, 401),
+                Arguments.of("GET", "/drivers/me/location", false, 401),
+                Arguments.of("DELETE", "/drivers/me/location", false, 401),
                 Arguments.of("GET", "/actuator/env", true, 403),
                 Arguments.of("GET", "/drivers/profile", true, 403),
                 Arguments.of("DELETE", "/drivers/profile", true, 403),
-                Arguments.of("DELETE", "/drivers/me", true, 403));
+                Arguments.of("DELETE", "/drivers/me", true, 403),
+                Arguments.of("GET", "/drivers/me/location", true, 403),
+                Arguments.of("DELETE", "/drivers/me/location", true, 403));
     }
 
     private HttpResponse<String> sendJson(String method, String path, String authHeader, String jsonBody)

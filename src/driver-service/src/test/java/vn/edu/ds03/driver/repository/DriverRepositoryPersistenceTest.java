@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import jakarta.persistence.EntityManager;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import org.assertj.core.api.InstanceOfAssertFactories;
@@ -21,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 import vn.edu.ds03.driver.DriverServiceApplication;
 import vn.edu.ds03.driver.dto.CreateDriverProfileRequest;
 import vn.edu.ds03.driver.dto.DriverProfileResponse;
+import vn.edu.ds03.driver.dto.UpdateDriverLocationRequest;
 import vn.edu.ds03.driver.model.Driver;
 import vn.edu.ds03.driver.model.DriverStatus;
 import vn.edu.ds03.driver.model.Vehicle;
@@ -142,5 +144,25 @@ class DriverRepositoryPersistenceTest {
         assertThat(readBack.driverId()).isEqualTo(created.driverId());
         assertThat(readBack.vehicle().licensePlate()).isEqualTo("59C-246.80");
         assertThat(driverRepository.findWithVehicleByUserId("00000000-0000-0000-0000-000000000000")).isEmpty();
+    }
+
+    @Test
+    @DisplayName("updateLocation persists DECIMAL(10,7) coordinates and reloads them accurately")
+    void updateLocation_existingDriver_persistsScaledCoordinatesInDatabase() {
+        String userId = "77777777-2222-3333-4444-555555555555";
+        driverProfileService.createProfile(userId, new CreateDriverProfileRequest("51k-777.88", VehicleType.BIKE));
+
+        DriverProfileResponse updated = driverProfileService.updateLocation(
+                userId,
+                new UpdateDriverLocationRequest(
+                        new BigDecimal("10.76262236"),
+                        new BigDecimal("106.66017244")));
+        entityManager.clear();
+
+        DriverProfileResponse reloaded = driverProfileService.getCurrentProfile(userId);
+        assertThat(updated.latitude()).isEqualByComparingTo("10.7626224");
+        assertThat(reloaded.latitude()).isEqualByComparingTo("10.7626224");
+        assertThat(reloaded.longitude()).isEqualByComparingTo("106.6601724");
+        assertThat(reloaded.status()).isEqualTo(DriverStatus.OFFLINE);
     }
 }

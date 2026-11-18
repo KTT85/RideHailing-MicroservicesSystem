@@ -4,12 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNoException;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.math.BigDecimal;
 import java.util.Locale;
 import java.util.UUID;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 class DriverVehicleModelTest {
 
@@ -79,5 +83,55 @@ class DriverVehicleModelTest {
         vehicle.assignId();
         assertThat(driver.getId()).isEqualTo(generatedDriverId);
         assertThat(vehicle.getId()).isEqualTo(generatedVehicleId);
+    }
+
+    @ParameterizedTest
+    @MethodSource("validCoordinatePairs")
+    @DisplayName("updateLocation scales valid coordinates to 7 decimals and preserves status")
+    void updateLocation_validAndBoundaryCoordinates_scalesToSevenDecimals(
+            String rawLat, String rawLon, String expectedLat, String expectedLon) {
+        Driver driver = new Driver("user-123");
+
+        driver.updateLocation(new BigDecimal(rawLat), new BigDecimal(rawLon));
+
+        assertThat(driver.getLatitude()).isEqualTo(new BigDecimal(expectedLat));
+        assertThat(driver.getLongitude()).isEqualTo(new BigDecimal(expectedLon));
+        assertThat(driver.getStatus()).isEqualTo(DriverStatus.OFFLINE);
+    }
+
+    static Stream<Arguments> validCoordinatePairs() {
+        return Stream.of(
+                Arguments.of("10.76262236", "106.66017244", "10.7626224", "106.6601724"),
+                Arguments.of("-90", "-180", "-90.0000000", "-180.0000000"),
+                Arguments.of("90.0", "180.0", "90.0000000", "180.0000000"),
+                Arguments.of("0", "0", "0.0000000", "0.0000000"));
+    }
+
+    @ParameterizedTest
+    @MethodSource("invalidCoordinatePairs")
+    @DisplayName("updateLocation rejects null or out-of-range coordinates without mutating existing location")
+    void updateLocation_invalidCoordinates_throwsIllegalArgumentWithoutMutatingExistingLocation(
+            BigDecimal invalidLat, BigDecimal invalidLon) {
+        Driver driver = new Driver("user-123");
+        driver.updateLocation(new BigDecimal("10.1000000"), new BigDecimal("106.2000000"));
+
+        assertThatThrownBy(() -> driver.updateLocation(invalidLat, invalidLon))
+                .isInstanceOf(IllegalArgumentException.class);
+
+        assertThat(driver.getLatitude()).isEqualByComparingTo("10.1000000");
+        assertThat(driver.getLongitude()).isEqualByComparingTo("106.2000000");
+    }
+
+    static Stream<Arguments> invalidCoordinatePairs() {
+        return Stream.of(
+                Arguments.of(null, new BigDecimal("106.0")),
+                Arguments.of(new BigDecimal("10.0"), null),
+                Arguments.of(new BigDecimal("-90.0000001"), new BigDecimal("106.0")),
+                Arguments.of(new BigDecimal("90.0000001"), new BigDecimal("106.0")),
+                Arguments.of(new BigDecimal("10.0"), new BigDecimal("-180.0000001")),
+                Arguments.of(new BigDecimal("10.0"), new BigDecimal("180.0000001")),
+                Arguments.of(new BigDecimal("1E+100000"), new BigDecimal("106.0")),
+                Arguments.of(new BigDecimal("1E-500000000"), new BigDecimal("106.0")),
+                Arguments.of(new BigDecimal("10.0"), new BigDecimal("1E-500000000")));
     }
 }
