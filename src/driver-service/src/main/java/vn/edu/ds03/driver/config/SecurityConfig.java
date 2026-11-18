@@ -87,6 +87,8 @@ public class SecurityConfig {
                         .permitAll()
                         .requestMatchers(HttpMethod.POST, "/drivers/profile")
                         .hasRole("DRIVER")
+                        .requestMatchers(HttpMethod.GET, "/drivers/me")
+                        .hasRole("DRIVER")
                         .anyRequest().denyAll())
                 .oauth2ResourceServer(resourceServer -> resourceServer
                         .jwt(jwt -> jwt.jwtAuthenticationConverter(jwtAuthenticationConverter)))

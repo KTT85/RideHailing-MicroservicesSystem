@@ -27,11 +27,7 @@ public class DriverProfileService {
 
     @Transactional
     public DriverProfileResponse createProfile(String userId, CreateDriverProfileRequest request) {
-        if (userId == null || userId.isBlank()) {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token subject");
-        }
-
-        String normalizedUserId = userId.strip().toLowerCase(Locale.ROOT);
+        String normalizedUserId = normalizeAndValidateUserId(userId);
         if (driverRepository.existsByUserId(normalizedUserId)) {
             throw new ResponseStatusException(HttpStatus.CONFLICT, "Driver profile already exists");
         }
@@ -47,13 +43,22 @@ public class DriverProfileService {
                     "Driver profile or license plate already exists");
         }
 
-        Vehicle vehicle = driver.getVehicle();
-        return new DriverProfileResponse(
-                driver.getId(),
-                driver.getUserId(),
-                driver.getStatus(),
-                driver.isAcceptingTrips(),
-                new DriverProfileResponse.VehicleProfile(
-                        vehicle.getId(), vehicle.getLicensePlate(), vehicle.getVehicleType()));
+        return DriverProfileResponse.from(driver);
+    }
+
+    @Transactional(readOnly = true)
+    public DriverProfileResponse getCurrentProfile(String userId) {
+        String normalizedUserId = normalizeAndValidateUserId(userId);
+        return driverRepository.findWithVehicleByUserId(normalizedUserId)
+                .map(DriverProfileResponse::from)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "Driver profile not found"));
+    }
+
+    private static String normalizeAndValidateUserId(String userId) {
+        if (userId == null || userId.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Invalid token subject");
+        }
+        return userId.strip().toLowerCase(Locale.ROOT);
     }
 }
