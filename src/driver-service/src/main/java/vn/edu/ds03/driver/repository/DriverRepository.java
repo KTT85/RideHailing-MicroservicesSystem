@@ -26,6 +26,19 @@ public interface DriverRepository extends JpaRepository<Driver, String> {
     @EntityGraph(attributePaths = "vehicle")
     Optional<Driver> findWithVehicleById(String id);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT d FROM Driver d WHERE d.currentTripId = :tripId")
+    Optional<Driver> findForUpdateByCurrentTripId(@Param("tripId") String tripId);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            UPDATE Driver d
+            SET d.status = vn.edu.ds03.driver.model.DriverStatus.BUSY
+            WHERE d.currentTripId = :tripId
+              AND d.status = vn.edu.ds03.driver.model.DriverStatus.RESERVED
+            """)
+    int startReservedTripByTripId(@Param("tripId") String tripId);
+
     @Query("""
             SELECT d FROM Driver d
             JOIN FETCH d.vehicle v

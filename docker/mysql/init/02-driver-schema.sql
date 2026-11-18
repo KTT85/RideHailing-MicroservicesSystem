@@ -39,3 +39,31 @@ CREATE TABLE IF NOT EXISTS driver_db.vehicles (
     CONSTRAINT fk_vehicles_driver FOREIGN KEY (driver_id)
         REFERENCES driver_db.drivers (id) ON DELETE RESTRICT
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS driver_db.processed_events (
+    id VARCHAR(140) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    consumer_name VARCHAR(100) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    event_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    event_type VARCHAR(64) NOT NULL,
+    processed_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (id),
+    CONSTRAINT uq_driver_processed_events_consumer_event UNIQUE (consumer_name, event_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE IF NOT EXISTS driver_db.outbox_events (
+    event_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    aggregate_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    event_type VARCHAR(64) NOT NULL,
+    correlation_id CHAR(36) CHARACTER SET ascii COLLATE ascii_bin NOT NULL,
+    payload TEXT NOT NULL,
+    status VARCHAR(24) NOT NULL DEFAULT 'PENDING',
+    attempt_count INT NOT NULL DEFAULT 0,
+    next_retry_at DATETIME(6) NULL,
+    last_error VARCHAR(512) NULL,
+    created_at DATETIME(6) NOT NULL,
+    PRIMARY KEY (event_id),
+    CONSTRAINT chk_driver_outbox_status CHECK (status IN ('PENDING', 'PUBLISHED', 'MANUAL_REVIEW')),
+    CONSTRAINT chk_driver_outbox_attempt CHECK (attempt_count >= 0),
+    INDEX idx_driver_outbox_retry (status, next_retry_at),
+    INDEX idx_driver_outbox_aggregate (aggregate_id, created_at)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
