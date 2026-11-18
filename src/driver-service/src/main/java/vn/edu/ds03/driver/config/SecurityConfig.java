@@ -103,6 +103,12 @@ public class SecurityConfig {
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
                         .requestMatchers(HttpMethod.GET, "/internal/drivers/candidates")
                         .hasRole("INTERNAL_SERVICE")
+                        .requestMatchers(
+                                HttpMethod.POST,
+                                "/internal/drivers/*/reserve",
+                                "/internal/drivers/*/start",
+                                "/internal/drivers/*/release")
+                        .hasRole("INTERNAL_SERVICE")
                         .anyRequest().denyAll())
                 .exceptionHandling(exceptions -> exceptions
                         .authenticationEntryPoint((req, res, ex) -> res.setStatus(HttpServletResponse.SC_UNAUTHORIZED))
