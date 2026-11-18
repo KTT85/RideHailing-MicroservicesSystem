@@ -5,6 +5,13 @@ app:
     secret: ${JWT_SECRET}
     issuer: ${JWT_ISSUER:ds03-user-service}
   internal-token: ${DRIVER_INTERNAL_TOKEN:}
+  messaging:
+    events-exchange: ${DRIVER_EVENTS_EXCHANGE:ride.events}
+    retry-ttl-ms: ${DRIVER_RETRY_TTL_MS:5000}
+    max-retry-attempts: ${DRIVER_MAX_RETRY_ATTEMPTS:3}
+    outbox-delay-ms: ${DRIVER_OUTBOX_DELAY_MS:2000}
+    outbox-retry-seconds: ${DRIVER_OUTBOX_RETRY_SECONDS:5}
+    outbox-scheduler-enabled: ${DRIVER_OUTBOX_SCHEDULER_ENABLED:true}
 spring:
   application:
     name: driver-service
@@ -23,6 +30,15 @@ spring:
         jdbc:
           time_zone: UTC
   rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+    listener:
+      simple:
+        acknowledge-mode: auto
+        prefetch: 1
+        default-requeue-rejected: false
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER}
