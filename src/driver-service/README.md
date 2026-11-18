@@ -58,6 +58,18 @@ An existing profile for the same user or an already registered license plate ret
 
 Both `latitude` (`[-90, 90]`) and `longitude` (`[-180, 180]`) are required and normalized to 7 decimal places (`DECIMAL(10,7)`). Returns HTTP 200 with the updated profile, HTTP 400 if coordinates are missing or out of bounds, or HTTP 404 if the driver profile does not exist.
 
+## Toggle driver availability
+
+`PATCH /drivers/me/availability` requires a valid User Service JWT with role `DRIVER`.
+
+```json
+{
+  "acceptingTrips": true
+}
+```
+
+Transitions the driver between `OFFLINE` (`acceptingTrips = false`) and `AVAILABLE` (`acceptingTrips = true`). Going `AVAILABLE` requires valid GPS coordinates to be set first; otherwise HTTP 409 (`ProblemDetail`) is returned. Availability cannot be toggled while the driver is assigned to an active trip (`RESERVED` or `BUSY`), which also returns HTTP 409.
+
 ## JWT settings
 
 The service verifies HS256 tokens from User Service. It requires the same Base64 `JWT_SECRET` and `JWT_ISSUER` as User Service; the issuer defaults to `ds03-user-service`. The decoded secret must contain at least 32 bytes. Do not commit the secret.
