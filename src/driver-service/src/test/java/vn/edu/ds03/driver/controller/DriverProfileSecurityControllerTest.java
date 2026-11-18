@@ -60,7 +60,8 @@ import vn.edu.ds03.driver.repository.DriverRepository;
                         + "org.springframework.boot.jdbc.autoconfigure.DataSourceTransactionManagerAutoConfiguration,"
                         + "org.springframework.boot.hibernate.autoconfigure.HibernateJpaAutoConfiguration,"
                         + "org.springframework.boot.data.jpa.autoconfigure.DataJpaRepositoriesAutoConfiguration,"
-                        + "org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration"
+                        + "org.springframework.boot.amqp.autoconfigure.RabbitAutoConfiguration",
+                "app.messaging.enabled=false"
         })
 class DriverProfileSecurityControllerTest {
 
