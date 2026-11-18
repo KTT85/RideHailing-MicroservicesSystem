@@ -28,6 +28,9 @@ Successful response is HTTP 201:
   "userId": "<user-uuid>",
   "status": "OFFLINE",
   "acceptingTrips": false,
+  "currentTripId": null,
+  "latitude": null,
+  "longitude": null,
   "vehicle": {
     "vehicleId": "<vehicle-uuid>",
     "licensePlate": "51A-123.45",
@@ -37,6 +40,10 @@ Successful response is HTTP 201:
 ```
 
 An existing profile for the same user or an already registered license plate returns HTTP 409. Invalid input returns HTTP 400; a missing/invalid token returns HTTP 401; a valid token without the `DRIVER` role returns HTTP 403.
+
+## Read current driver profile
+
+`GET /drivers/me` requires a valid User Service JWT with role `DRIVER` and returns the authenticated driver's profile, status, coordinates, active trip reference, and vehicle in HTTP 200. If the authenticated account has not created a driver profile yet, it returns HTTP 404 (`ProblemDetail`).
 
 ## JWT settings
 
