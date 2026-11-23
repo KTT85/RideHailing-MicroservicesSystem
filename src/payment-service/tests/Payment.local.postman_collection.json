@@ -1,0 +1,598 @@
+{
+  "item": [
+    {
+      "request": {
+        "url": "{{userBase}}/auth/login",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "raw": "{\"identifier\":\"{{loginIdentifier}}\",\"password\":\"{{loginPassword}}\"}",
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "method": "POST"
+      },
+      "name": "01 Login Passenger (User service)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "exec": [
+              "pm.test('Login OK',()=>pm.response.to.have.status(200)); if(pm.response.code===200){const r=pm.response.json(); pm.collectionVariables.set('accessToken',r.accessToken); pm.collectionVariables.set('passengerId',r.user.id);}"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "02 Payment health",
+      "request": {
+        "url": "{{paymentBase}}/actuator/health",
+        "auth": {
+          "type": "noauth"
+        },
+        "header": [],
+        "method": "GET"
+      }
+    },
+    {
+      "name": "03 Create demo result queue (test harness)",
+      "request": {
+        "url": "{{rabbitBase}}/api/queues/%2F/payment.demo.results",
+        "auth": {
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{rabbitUser}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{rabbitPassword}}",
+              "type": "string"
+            }
+          ],
+          "type": "basic"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "raw": "{\"durable\":true,\"auto_delete\":false,\"arguments\":{}}",
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "method": "PUT"
+      }
+    },
+    {
+      "name": "04 Bind demo queue before publishing",
+      "request": {
+        "url": "{{rabbitBase}}/api/bindings/%2F/e/ride.events/q/payment.demo.results",
+        "auth": {
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{rabbitUser}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{rabbitPassword}}",
+              "type": "string"
+            }
+          ],
+          "type": "basic"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "raw": "{\"routing_key\":\"#\",\"arguments\":{}}",
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "method": "POST"
+      }
+    },
+    {
+      "request": {
+        "url": "{{rabbitBase}}/api/exchanges/%2F/ride.events/publish",
+        "auth": {
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{rabbitUser}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{rabbitPassword}}",
+              "type": "string"
+            }
+          ],
+          "type": "basic"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "raw": "{{brokerPublishBody}}",
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "method": "POST"
+      },
+      "name": "05 TRANSFER PAY (simulates trusted Trip)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "if (!pm.collectionVariables.get('tripId')) pm.collectionVariables.set('tripId', pm.variables.replaceIn('{{$' + 'guid}}'));\nif (!pm.collectionVariables.get('correlationId')) pm.collectionVariables.set('correlationId', pm.variables.replaceIn('{{$' + 'guid}}'));\nif (!pm.collectionVariables.get('payEventId')) pm.collectionVariables.set('payEventId', pm.variables.replaceIn('{{$' + 'guid}}'));\nconst trip = pm.collectionVariables.get('tripId');\nconst envelope = {eventId:pm.collectionVariables.get('payEventId'),eventType:'PaymentRequested',correlationId:pm.collectionVariables.get('correlationId'),timestamp:new Date().toISOString(),payload:{tripId:trip,passengerId:pm.collectionVariables.get('passengerId'),method:'TRANSFER',amount:50000,currency:'VND'}};\nif ('PAY') envelope.payload.idempotencyKey=trip+':'+'PAY';\npm.variables.set('brokerPublishBody', JSON.stringify({properties:{delivery_mode:2,content_type:'application/json'},routing_key:'PaymentRequested',payload:JSON.stringify(envelope),payload_encoding:'string'}));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "request": {
+        "url": "{{rabbitBase}}/api/exchanges/%2F/ride.events/publish",
+        "auth": {
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{rabbitUser}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{rabbitPassword}}",
+              "type": "string"
+            }
+          ],
+          "type": "basic"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "raw": "{{brokerPublishBody}}",
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "method": "POST"
+      },
+      "name": "06 Repeat same PAY event (no new charge)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "if (!pm.collectionVariables.get('tripId')) pm.collectionVariables.set('tripId', pm.variables.replaceIn('{{$' + 'guid}}'));\nif (!pm.collectionVariables.get('correlationId')) pm.collectionVariables.set('correlationId', pm.variables.replaceIn('{{$' + 'guid}}'));\nif (!pm.collectionVariables.get('payEventId')) pm.collectionVariables.set('payEventId', pm.variables.replaceIn('{{$' + 'guid}}'));\nconst trip = pm.collectionVariables.get('tripId');\nconst envelope = {eventId:pm.collectionVariables.get('payEventId'),eventType:'PaymentRequested',correlationId:pm.collectionVariables.get('correlationId'),timestamp:new Date().toISOString(),payload:{tripId:trip,passengerId:pm.collectionVariables.get('passengerId'),method:'TRANSFER',amount:50000,currency:'VND'}};\nif ('PAY') envelope.payload.idempotencyKey=trip+':'+'PAY';\npm.variables.set('brokerPublishBody', JSON.stringify({properties:{delivery_mode:2,content_type:'application/json'},routing_key:'PaymentRequested',payload:JSON.stringify(envelope),payload_encoding:'string'}));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "07 Read TRANSFER (poll until SUCCESS)",
+      "request": {
+        "url": "{{paymentBase}}/payments/by-trip/{{tripId}}",
+        "auth": {
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ],
+          "type": "bearer"
+        },
+        "header": [],
+        "method": "GET"
+      }
+    },
+    {
+      "request": {
+        "url": "{{rabbitBase}}/api/exchanges/%2F/ride.events/publish",
+        "auth": {
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{rabbitUser}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{rabbitPassword}}",
+              "type": "string"
+            }
+          ],
+          "type": "basic"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "raw": "{{brokerPublishBody}}",
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "method": "POST"
+      },
+      "name": "08 Full REFUND (simulates Trip cancellation Saga)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "if (!pm.collectionVariables.get('tripId')) pm.collectionVariables.set('tripId', pm.variables.replaceIn('{{$' + 'guid}}'));\nif (!pm.collectionVariables.get('correlationId')) pm.collectionVariables.set('correlationId', pm.variables.replaceIn('{{$' + 'guid}}'));\nif (!pm.collectionVariables.get('refundEventId')) pm.collectionVariables.set('refundEventId', pm.variables.replaceIn('{{$' + 'guid}}'));\nconst trip = pm.collectionVariables.get('tripId');\nconst envelope = {eventId:pm.collectionVariables.get('refundEventId'),eventType:'PaymentRefundRequested',correlationId:pm.collectionVariables.get('correlationId'),timestamp:new Date().toISOString(),payload:{tripId:trip,passengerId:pm.collectionVariables.get('passengerId'),method:'TRANSFER',amount:50000,currency:'VND'}};\nif ('REFUND') envelope.payload.idempotencyKey=trip+':'+'REFUND';\npm.variables.set('brokerPublishBody', JSON.stringify({properties:{delivery_mode:2,content_type:'application/json'},routing_key:'PaymentRefundRequested',payload:JSON.stringify(envelope),payload_encoding:'string'}));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "09 Read TRANSFER (poll until REFUNDED)",
+      "request": {
+        "url": "{{paymentBase}}/payments/by-trip/{{tripId}}",
+        "auth": {
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ],
+          "type": "bearer"
+        },
+        "header": [],
+        "method": "GET"
+      }
+    },
+    {
+      "request": {
+        "url": "{{rabbitBase}}/api/exchanges/%2F/ride.events/publish",
+        "auth": {
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{rabbitUser}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{rabbitPassword}}",
+              "type": "string"
+            }
+          ],
+          "type": "basic"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "raw": "{{brokerPublishBody}}",
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "method": "POST"
+      },
+      "name": "10 CASH completion (must stay PENDING)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "if (!pm.collectionVariables.get('cashTripId')) pm.collectionVariables.set('cashTripId', pm.variables.replaceIn('{{$' + 'guid}}'));\nif (!pm.collectionVariables.get('correlationId')) pm.collectionVariables.set('correlationId', pm.variables.replaceIn('{{$' + 'guid}}'));\nif (!pm.collectionVariables.get('cashCompletedEventId')) pm.collectionVariables.set('cashCompletedEventId', pm.variables.replaceIn('{{$' + 'guid}}'));\nconst trip = pm.collectionVariables.get('cashTripId');\nconst envelope = {eventId:pm.collectionVariables.get('cashCompletedEventId'),eventType:'TripCompleted',correlationId:pm.collectionVariables.get('correlationId'),timestamp:new Date().toISOString(),payload:{tripId:trip,passengerId:pm.collectionVariables.get('passengerId'),method:'CASH',amount:50000,currency:'VND'}};\nif ('') envelope.payload.idempotencyKey=trip+':'+'';\npm.variables.set('brokerPublishBody', JSON.stringify({properties:{delivery_mode:2,content_type:'application/json'},routing_key:'TripCompleted',payload:JSON.stringify(envelope),payload_encoding:'string'}));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "11 Read CASH (expect PENDING)",
+      "request": {
+        "url": "{{paymentBase}}/payments/by-trip/{{cashTripId}}",
+        "auth": {
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ],
+          "type": "bearer"
+        },
+        "header": [],
+        "method": "GET"
+      }
+    },
+    {
+      "request": {
+        "url": "{{rabbitBase}}/api/exchanges/%2F/ride.events/publish",
+        "auth": {
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{rabbitUser}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{rabbitPassword}}",
+              "type": "string"
+            }
+          ],
+          "type": "basic"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "raw": "{{brokerPublishBody}}",
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "method": "POST"
+      },
+      "name": "12 CASH driver confirmation (simulates trusted Trip)",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "exec": [
+              "if (!pm.collectionVariables.get('cashTripId')) pm.collectionVariables.set('cashTripId', pm.variables.replaceIn('{{$' + 'guid}}'));\nif (!pm.collectionVariables.get('correlationId')) pm.collectionVariables.set('correlationId', pm.variables.replaceIn('{{$' + 'guid}}'));\nif (!pm.collectionVariables.get('cashConfirmedEventId')) pm.collectionVariables.set('cashConfirmedEventId', pm.variables.replaceIn('{{$' + 'guid}}'));\nconst trip = pm.collectionVariables.get('cashTripId');\nconst envelope = {eventId:pm.collectionVariables.get('cashConfirmedEventId'),eventType:'CashPaymentConfirmationRequested',correlationId:pm.collectionVariables.get('correlationId'),timestamp:new Date().toISOString(),payload:{tripId:trip,passengerId:pm.collectionVariables.get('passengerId'),method:'CASH',amount:50000,currency:'VND'}};\nif ('CONFIRM_CASH') envelope.payload.idempotencyKey=trip+':'+'CONFIRM_CASH';\npm.variables.set('brokerPublishBody', JSON.stringify({properties:{delivery_mode:2,content_type:'application/json'},routing_key:'CashPaymentConfirmationRequested',payload:JSON.stringify(envelope),payload_encoding:'string'}));"
+            ],
+            "type": "text/javascript"
+          }
+        }
+      ]
+    },
+    {
+      "name": "13 Read CASH (poll until SUCCESS)",
+      "request": {
+        "url": "{{paymentBase}}/payments/by-trip/{{cashTripId}}",
+        "auth": {
+          "bearer": [
+            {
+              "key": "token",
+              "value": "{{accessToken}}",
+              "type": "string"
+            }
+          ],
+          "type": "bearer"
+        },
+        "header": [],
+        "method": "GET"
+      }
+    },
+    {
+      "name": "14 Inspect demo queue without consuming permanently",
+      "request": {
+        "url": "{{rabbitBase}}/api/queues/%2F/payment.demo.results/get",
+        "auth": {
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{rabbitUser}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{rabbitPassword}}",
+              "type": "string"
+            }
+          ],
+          "type": "basic"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "raw": "{\"count\":20,\"ackmode\":\"ack_requeue_true\",\"encoding\":\"auto\",\"truncate\":65536}",
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "method": "POST"
+      }
+    },
+    {
+      "name": "15 Inspect DLQ without consuming permanently",
+      "request": {
+        "url": "{{rabbitBase}}/api/queues/%2F/payment.dlq/get",
+        "auth": {
+          "basic": [
+            {
+              "key": "username",
+              "value": "{{rabbitUser}}",
+              "type": "string"
+            },
+            {
+              "key": "password",
+              "value": "{{rabbitPassword}}",
+              "type": "string"
+            }
+          ],
+          "type": "basic"
+        },
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "raw": "{\"count\":10,\"ackmode\":\"ack_requeue_true\",\"encoding\":\"auto\",\"truncate\":65536}",
+          "mode": "raw",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "method": "POST"
+      }
+    }
+  ],
+  "info": {
+    "name": "DS03 Payment Local",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Local Payment component harness. RabbitMQ Management plugin required. Commands simulate Trip; not an end-to-end ride/Saga test. Wait/poll for async results. Clear generated IDs to start a new scenario. Keep credentials local and do not export them."
+  },
+  "variable": [
+    {
+      "key": "loginPassword",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "rabbitBase",
+      "value": "http://localhost:15672",
+      "type": "string"
+    },
+    {
+      "key": "rabbitUser",
+      "value": "guest",
+      "type": "string"
+    },
+    {
+      "key": "payEventId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cashCompletedEventId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "refundEventId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "rabbitPassword",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "userBase",
+      "value": "http://localhost:8081",
+      "type": "string"
+    },
+    {
+      "key": "paymentBase",
+      "value": "http://localhost:8085",
+      "type": "string"
+    },
+    {
+      "key": "tripId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cashTripId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "loginIdentifier",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "cashConfirmedEventId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "passengerId",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "accessToken",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "correlationId",
+      "value": "",
+      "type": "string"
+    }
+  ]
+}
