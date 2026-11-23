@@ -1,4 +1,4 @@
-**/target/
+﻿**/target/
 .env
 .env.*
 !.env.example
@@ -9,3 +9,8 @@
 .DS_Store
 Thumbs.db
 .local/
+**/node_modules/
+**/dist/
+**/dist-messaging/
+.npm-cache/
+**/.jest-cache/
