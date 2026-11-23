@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "../..", "outDir": "dist", "baseUrl": ".",
+    "paths": { "*": ["node_modules/*", "node_modules/@types/*"] },
+    "types": ["node", "jest"]
+  },
+  "include": ["src/**/*.ts", "../../tests/notification-service/notification.rest.test.ts"]
+}
