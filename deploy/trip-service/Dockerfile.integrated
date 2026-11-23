@@ -1,0 +1,12 @@
+FROM node:20-bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends openssl && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY src/trip-service/package*.json ./
+RUN npm ci
+COPY src/trip-service/prisma ./prisma
+RUN npm run prisma:generate
+COPY src/trip-service/tsconfig.json ./
+COPY src/trip-service/src ./src
+RUN npm run build
+EXPOSE 3000
+CMD ["sh", "-c", "npm run prisma:migrate && npm start"]

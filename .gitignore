@@ -8,3 +8,8 @@
 *.iml
 .DS_Store
 Thumbs.db
+**/node_modules/
+**/dist/
+**/dist-messaging/
+.npm-cache/
+**/.jest-cache/

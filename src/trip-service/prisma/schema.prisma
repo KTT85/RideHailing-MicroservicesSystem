@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TripStatus {
+  REQUESTED
+  MATCHING
+  DRIVER_ASSIGNED
+  ACCEPTED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+  PAYMENT_PENDING
+  PAYMENT_FAILED
+  COMPENSATING
+  CANCELLED
+
+  @@map("trip_status")
+}
+
+model Trip {
+  id             String     @id @default(uuid()) @db.Uuid
+  passengerId    String     @map("passenger_id") @db.Uuid
+  driverId       String?    @map("driver_id") @db.Uuid
+  status         TripStatus @default(REQUESTED)
+  pickup         Json       @db.JsonB
+  dropoff        Json       @db.JsonB
+  fare           Float?
+  paymentId      String?    @map("payment_id")
+  idempotencyKey String     @unique @map("idempotency_key") @db.VarChar(255)
+  requestedAt    DateTime   @default(now()) @map("requested_at") @db.Timestamptz(6)
+  acceptedAt     DateTime?  @map("accepted_at") @db.Timestamptz(6)
+  startedAt      DateTime?  @map("started_at") @db.Timestamptz(6)
+  completedAt    DateTime?  @map("completed_at") @db.Timestamptz(6)
+  cancelledAt    DateTime?  @map("cancelled_at") @db.Timestamptz(6)
+  cancelReason   String?    @map("cancel_reason")
+
+  @@index([passengerId, requestedAt])
+  @@index([driverId, requestedAt])
+  @@index([status])
+  @@map("trips")
+}
+
+model OutboxEvent {
+  id            String    @id @default(uuid()) @db.Uuid
+  aggregateId   String    @map("aggregate_id") @db.Uuid
+  eventType     String    @map("event_type") @db.VarChar(100)
+  payload       Json      @db.JsonB
+  correlationId String    @map("correlation_id") @db.VarChar(255)
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  publishedAt   DateTime? @map("published_at") @db.Timestamptz(6)
+
+  @@index([publishedAt, createdAt])
+  @@map("outbox_events")
+}
+
+model ProcessedEvent {
+  eventId     String   @id @map("event_id") @db.Uuid
+  processedAt DateTime @default(now()) @map("processed_at") @db.Timestamptz(6)
+
+  @@map("processed_events")
+}

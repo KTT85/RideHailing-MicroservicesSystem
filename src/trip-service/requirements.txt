@@ -1,0 +1,9 @@
+# Node.js/TypeScript dependency inventory for this service.
+# This is informational; install from package.json with `npm install`.
+# It is not a pip requirements file.
+node >=20
+@prisma/client ==5.22.0
+prisma ==5.22.0
+typescript ==5.7.2
+tsx ==4.19.2
+@types/node ==20.17.10
