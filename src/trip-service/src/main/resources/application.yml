@@ -3,6 +3,9 @@ server:
 spring:
   application:
     name: trip-service
+  sql:
+    init:
+      mode: always
   datasource:
     url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/trip_db?connectionTimeZone=UTC&sslMode=DISABLED&allowPublicKeyRetrieval=true
     username: ${MYSQL_USERNAME:trip_app}
@@ -18,6 +21,10 @@ spring:
         jdbc:
           time_zone: UTC
   rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER}
