@@ -1,10 +1,12 @@
 package vn.edu.ds03.driver.event;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import vn.edu.ds03.driver.exception.InvalidDriverEventException;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record DriverInboundEvent(
         String eventId,
         String eventType,
@@ -13,7 +15,8 @@ public record DriverInboundEvent(
         Instant occurredAt,
         Payload payload) {
 
-    private static final Set<String> START_EVENTS = Set.of("TripStarted", "trip.started");
+    public static final String START_COMMAND = "DriverStartRequested";
+    private static final Set<String> START_EVENTS = Set.of(START_COMMAND, "TripStarted", "trip.started");
     private static final Set<String> EXPLICIT_RELEASE_COMMANDS =
             Set.of("DriverReleaseRequested", "driver.release_requested");
     private static final Set<String> TRIP_TERMINAL_RELEASE_EVENTS = Set.of(
@@ -24,6 +27,7 @@ public record DriverInboundEvent(
             "TripCancelled",
             "trip.cancelled");
 
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record Payload(String tripId, String id, String driverId, String reason) {
         public Payload(String tripId, String driverId, String reason) {
             this(tripId, null, driverId, reason);
@@ -67,7 +71,7 @@ public record DriverInboundEvent(
             throw new InvalidDriverEventException("Conflicting payload.tripId and payload.id");
         }
         requireCanonicalUuid(payload.resolvedTripId(), "payload.tripId");
-        if (isExplicitReleaseCommand()) {
+        if (isExplicitReleaseCommand() || START_COMMAND.equals(eventType)) {
             requireCanonicalUuid(payload.driverId(), "payload.driverId");
         } else if (payload.driverId() != null) {
             requireCanonicalUuid(payload.driverId(), "payload.driverId");

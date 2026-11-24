@@ -101,7 +101,7 @@ public class SecurityConfig {
                 .addFilterBefore(new InternalServiceTokenFilter(expectedDigest), AnonymousAuthenticationFilter.class)
                 .authorizeHttpRequests(authorize -> authorize
                         .dispatcherTypeMatchers(DispatcherType.ERROR).permitAll()
-                        .requestMatchers(HttpMethod.GET, "/internal/drivers/candidates")
+                        .requestMatchers(HttpMethod.GET, "/internal/drivers/candidates", "/internal/drivers/reservations/*")
                         .hasRole("INTERNAL_SERVICE")
                         .requestMatchers(
                                 HttpMethod.POST,

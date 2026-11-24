@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="vi"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#172d2b"><title>Trạm xe · Demo DS03</title>
+<link rel="icon" href="mark.svg" type="image/svg+xml"><link rel="stylesheet" href="app.css"><link rel="stylesheet" href="live.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin="" defer></script>
+<script src="locations.js" defer></script><script src="map.js" defer></script><script src="live.js" defer></script><script src="app.js" defer></script>
+</head><body>
+<header class="mast"><div class="mast-inner"><a class="brand" href="#route"><img src="mark.svg" width="38" height="38" alt="">Trạm xe</a>
+<nav aria-label="Đi tới khu vực"><a class="tab" href="#live">Kiểm thử</a></nav>
+<span class="project">DS03 <b>/</b> Hệ phân tán</span></div></header>
+<main>
+<div class="intro"><h1>Kiểm thử điều phối chuyến xe</h1></div>
+<div class="workspace">
+<section id="route" class="card map-card"><div class="card-head"><h2>Bản đồ chuyến đi</h2><span class="map-place">Hà Nội</span></div>
+<div class="map-view"><div id="map" role="region" aria-label="Bản đồ và lộ trình ô tô"></div></div>
+<p id="route-status" class="route-status" role="status"></p>
+<div class="itinerary">
+<form id="pickup-search" class="place-search"><span class="point a" aria-hidden="true">A</span><div>
+<label for="pickup">Điểm đón</label><div class="search-field"><input id="pickup" type="search" placeholder="Tên đường, địa chỉ…" maxlength="120" autocomplete="off" required><button type="submit">Tìm</button></div>
+<p id="pickup-feedback" class="place-feedback" aria-live="polite"></p><ul id="pickup-results" class="place-results" hidden></ul></div></form>
+<form id="dropoff-search" class="place-search"><span class="point b" aria-hidden="true">B</span><div>
+<label for="dropoff">Điểm trả</label><div class="search-field"><input id="dropoff" type="search" placeholder="Tên đường, địa chỉ…" maxlength="120" autocomplete="off" required><button type="submit">Tìm</button></div>
+<p id="dropoff-feedback" class="place-feedback" aria-live="polite"></p><ul id="dropoff-results" class="place-results" hidden></ul></div></form>
+</div>
+</section>
+<div id="live"></div>
+<section id="demo-results" class="card" aria-labelledby="demo-results-title" hidden>
+<div class="card-head"><h2 id="demo-results-title">Kết quả demo</h2><button id="export-demo" type="button" class="link-btn" disabled>Tải kết quả ca này</button></div>
+<div role="region" aria-live="polite" aria-labelledby="demo-results-title"></div>
+</section>
+</div></main>
+</body></html>

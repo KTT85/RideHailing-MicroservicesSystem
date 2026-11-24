@@ -1,15 +1,16 @@
 name: ridehailing-trip
 services:
-  postgres:
-    image: postgres:15
+  mysql:
+    image: mysql:8.4
     environment:
-      POSTGRES_USER: trip_app
-      POSTGRES_PASSWORD: ${TRIP_DB_PASSWORD:?Set TRIP_DB_PASSWORD}
-      POSTGRES_DB: trip_service_db
-    ports: ["127.0.0.1:5433:5432"]
-    volumes: ["trip-data:/var/lib/postgresql/data"]
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+      MYSQL_USER: trip_app
+      MYSQL_PASSWORD: ${TRIP_DB_PASSWORD:?Set TRIP_DB_PASSWORD}
+      MYSQL_DATABASE: trip_db
+    ports: ["127.0.0.1:3307:3306"]
+    volumes: ["trip-mysql-data:/var/lib/mysql"]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U trip_app -d trip_service_db"]
+      test: ["CMD-SHELL", "MYSQL_PWD=\"$$MYSQL_PASSWORD\" mysql --protocol=TCP -h 127.0.0.1 -utrip_app trip_db --execute='SELECT 1' --silent"]
       interval: 5s
       timeout: 5s
       retries: 20
@@ -31,16 +32,15 @@ services:
       context: .
       dockerfile: deploy/trip-service/Dockerfile.integrated
     environment:
-      DATABASE_URL: ${TRIP_DATABASE_URL:?Set TRIP_DATABASE_URL with postgres hostname}
+      MYSQL_TRIP_PASSWORD: ${TRIP_DB_PASSWORD:?Set TRIP_DB_PASSWORD}
       RABBITMQ_URL: ${TRIP_RABBITMQ_URL:?Set TRIP_RABBITMQ_URL with rabbitmq hostname}
-      PORT: 3000
-    ports: ["127.0.0.1:3000:3000"]
+    ports: ["127.0.0.1:8083:8000"]
     restart: on-failure
     depends_on:
-      postgres:
+      mysql:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
 volumes:
-  trip-data:
+  trip-mysql-data:
   trip-rabbit:

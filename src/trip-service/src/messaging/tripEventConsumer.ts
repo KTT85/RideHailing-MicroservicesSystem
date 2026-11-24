@@ -4,7 +4,7 @@ import type { IProcessedEventRepository } from "../repositories/InMemoryProcesse
 import type { IOutboxRepository } from "../outbox/IOutboxRepository";
 import type { EventEnvelope } from "./IEventPublisher";
 import { parseTripEvent, tripPaymentSaga, type SagaAction } from "../saga/tripPaymentSaga";
-import { CONSUMED_EVENTS, messagingLogger, RETRY_QUEUES, TRIP_QUEUE } from "./RabbitMQConnection";
+import { CONSUMED_EVENTS, messagingLogger, RETRY_QUEUES, RIDE_RESULT_EVENTS, TRIP_QUEUE } from "./RabbitMQConnection";
 
 /** Serial consumer with in-process checkpoints for partially completed actions. */
 export class TripEventConsumer {
@@ -15,7 +15,8 @@ export class TripEventConsumer {
   /** Injects transport and replaceable persistence contracts. */
   constructor(private readonly channel: ConfirmChannel, private readonly trips: ITripRepository,
     private readonly outbox: IOutboxRepository, private readonly processed: IProcessedEventRepository,
-    private readonly durableHandler?: (event: EventEnvelope<Record<string, unknown>>) => Promise<void>) {}
+    private readonly durableHandler?: (event: EventEnvelope<Record<string, unknown>>) => Promise<void>,
+    private readonly rideHandler?: (event: EventEnvelope<Record<string, unknown>>) => Promise<void>) {}
 
   /** Registers a manually acknowledged consumer. */
   async start(): Promise<void> {
@@ -45,8 +46,17 @@ export class TripEventConsumer {
   private async processMessage(message: ConsumeMessage): Promise<void> {
     let correlationId = "unknown";
     try {
-      const event = parseTripEvent(JSON.parse(message.content.toString("utf8")) as unknown);
+      const body = JSON.parse(message.content.toString("utf8"));
+      const integrated = Boolean(this.rideHandler && (RIDE_RESULT_EVENTS as readonly string[]).includes(body?.eventType));
+      const event = parseTripEvent(integrated ? {
+        ...body, occurredAt: body.occurredAt ?? body.timestamp, source: body.source ?? "ride.events",
+      } : body);
       correlationId = event.correlationId;
+      if (integrated && this.rideHandler) {
+        await this.rideHandler(event);
+        this.channel.ack(message);
+        return;
+      }
       if (!(CONSUMED_EVENTS as readonly string[]).includes(event.eventType)) throw new Error("Unsupported incoming event");
       if (this.durableHandler) {
         await this.durableHandler(event);

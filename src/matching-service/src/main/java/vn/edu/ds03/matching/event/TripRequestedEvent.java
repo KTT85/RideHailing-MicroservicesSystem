@@ -1,11 +1,13 @@
 package vn.edu.ds03.matching.event;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.Set;
 import java.util.UUID;
 import vn.edu.ds03.matching.exception.InvalidTripEventException;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record TripRequestedEvent(
         String eventId,
         String eventType,
@@ -32,7 +34,13 @@ public record TripRequestedEvent(
             BigDecimal pickupLatitude,
             BigDecimal pickupLongitude,
             String vehicleType,
-            PickupLocation pickup) {
+            PickupLocation pickup,
+            String demoFault) {
+
+        public Payload(String tripId, String id, String passengerId, BigDecimal pickupLatitude,
+                       BigDecimal pickupLongitude, String vehicleType, PickupLocation pickup) {
+            this(tripId, id, passengerId, pickupLatitude, pickupLongitude, vehicleType, pickup, null);
+        }
 
         public String resolvedTripId() {
             return tripId != null ? tripId : id;

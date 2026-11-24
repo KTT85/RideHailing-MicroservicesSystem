@@ -66,13 +66,12 @@ public class DriverEventService {
                 new ProcessedEvent(CONSUMER_NAME, event.eventId(), event.eventType(), now));
 
         if (event.isStartEvent()) {
-            handleStartEvent(event);
-            return false;
+            return handleStartEvent(event, now);
         }
         return handleReleaseEvent(event, now);
     }
 
-    private void handleStartEvent(DriverInboundEvent event) {
+    private boolean handleStartEvent(DriverInboundEvent event, Instant now) {
         String tripId = event.payload().resolvedTripId();
         String driverId = event.payload().driverId();
         if (driverId != null) {
@@ -85,12 +84,26 @@ public class DriverEventService {
                     log.warn(
                             "service=driver-service event=LateTripStartedIgnored eventId={} tripId={} driverId={}",
                             event.eventId(), tripId, driverId);
+                    return false;
                 }
             }
-            return;
+            if (!DriverInboundEvent.START_COMMAND.equals(event.eventType())) {
+                return false;
+            }
+            String id = UUID.randomUUID().toString();
+            String type = "DriverStarted";
+            var outbound = new DriverStartedEvent(id, type, event.correlationId(), now, new StartedTrip(tripId, driverId));
+            outboxEventRepository.saveAndFlush(new OutboxEvent(id, tripId, type, event.correlationId(),
+                    objectMapper.writeValueAsString(outbound), now));
+            return true;
         }
         driverRepository.startReservedTripByTripId(tripId);
+        return false;
     }
+
+    private record DriverStartedEvent(String eventId, String eventType, String correlationId, Instant timestamp,
+                                      StartedTrip payload) { }
+    private record StartedTrip(String tripId, String driverId) { }
 
     private boolean handleReleaseEvent(DriverInboundEvent event, Instant now) {
         String tripId = event.payload().resolvedTripId();

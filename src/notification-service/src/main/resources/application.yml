@@ -17,11 +17,19 @@ spring:
       hibernate:
         jdbc:
           time_zone: UTC
+  sql:
+    init:
+      mode: always
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}
     port: ${RABBITMQ_PORT:5672}
     username: ${RABBITMQ_USER}
     password: ${RABBITMQ_PASSWORD}
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
 management:
   endpoints:
     web:

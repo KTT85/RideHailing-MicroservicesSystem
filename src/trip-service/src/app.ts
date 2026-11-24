@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import express, { type RequestHandler } from "express";
+import express, { type RequestHandler, type Router } from "express";
 import pino, { type Logger } from "pino";
 import type { ParsedQs } from "qs";
 import type { ParamsDictionary } from "express-serve-static-core";
@@ -20,6 +20,8 @@ export interface TripServiceDependencies {
   repository?: ITripRepository;
   eventPublisher?: IEventPublisher;
   logger?: Logger;
+  integratedRoutes?: Router;
+  enableLegacyRoutes?: boolean;
 }
 
 /** Creates a JSON logger with the service field required by the API contract. */
@@ -69,7 +71,8 @@ export function createApp(dependencies: TripServiceDependencies = {}): express.E
 
   app.use(requestContext);
   app.use(express.json());
-  app.use("/api/trips", createTripRoutes(tripController));
+  if (dependencies.integratedRoutes) app.use(dependencies.integratedRoutes);
+  if (dependencies.enableLegacyRoutes !== false) app.use("/api/trips", createTripRoutes(tripController));
   app.use(routeNotFound);
   app.use(errorHandler);
   return app;

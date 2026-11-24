@@ -22,6 +22,7 @@ function parseLocation(value: Prisma.JsonValue): TripLocation {
 }
 
 function toTrip(row: TripRow): Trip {
+  if (row.status === "MATCHED" || row.status === "STARTING") throw new Error("Integrated ride in legacy repository");
   return {
     id: row.id,
     passengerId: row.passengerId,
@@ -72,13 +73,13 @@ export class PrismaTripRepository implements ITripRepository {
 
   /** Looks up a trip by UUID. */
   async findById(id: string): Promise<Trip | null> {
-    const row = await this.prisma.trip.findUnique({ where: { id } });
+    const row = await this.prisma.trip.findUnique({ where: { id, correlationId: null } });
     return row === null ? null : toTrip(row);
   }
 
   /** Looks up a trip by its unique idempotency key. */
   async findByIdempotencyKey(key: string): Promise<Trip | null> {
-    const row = await this.prisma.trip.findUnique({ where: { idempotencyKey: key } });
+    const row = await this.prisma.trip.findUnique({ where: { idempotencyKey: key, correlationId: null } });
     return row === null ? null : toTrip(row);
   }
 
@@ -98,7 +99,7 @@ export class PrismaTripRepository implements ITripRepository {
     if (patch.cancelledAt !== undefined) data.cancelledAt = toDate(patch.cancelledAt);
     if (patch.cancelReason !== undefined) data.cancelReason = patch.cancelReason;
 
-    return toTrip(await this.prisma.trip.update({ where: { id }, data }));
+    return toTrip(await this.prisma.trip.update({ where: { id, correlationId: null }, data }));
   }
 
   /** Returns trips matching the supplied passenger, driver, and status filters. */
@@ -109,6 +110,7 @@ export class PrismaTripRepository implements ITripRepository {
   }): Promise<Trip[]> {
     const rows = await this.prisma.trip.findMany({
       where: {
+        correlationId: null,
         ...(filter.passengerId === undefined ? {} : { passengerId: filter.passengerId }),
         ...(filter.driverId === undefined ? {} : { driverId: filter.driverId }),
         ...(filter.status === undefined ? {} : { status: filter.status }),

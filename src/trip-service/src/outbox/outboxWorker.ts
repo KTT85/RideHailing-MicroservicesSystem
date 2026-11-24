@@ -10,7 +10,8 @@ export class OutboxWorker {
 
   /** Configures the outbox, publisher and batch size. */
   constructor(private readonly repository: IOutboxRepository, private readonly publisher: IEventPublisher,
-    private readonly batchSize = 100) {}
+    private readonly batchSize = 100,
+    private readonly beforePublish?: (eventType: string, aggregateId: string, correlationId: string) => Promise<void>) {}
 
   /** Publishes one batch; retains failed records for the next attempt. */
   async runOnce(): Promise<void> {
@@ -41,6 +42,7 @@ export class OutboxWorker {
   private async publishBatch(): Promise<void> {
     for (const event of await this.repository.listUnpublished(this.batchSize)) {
       try {
+        await this.beforePublish?.(event.eventType, event.aggregateId, event.correlationId);
         await this.publisher.publish({ eventId: event.id, eventType: event.eventType,
           correlationId: event.correlationId, source: "trip-service",
           occurredAt: event.createdAt ?? new Date().toISOString(), payload: event.payload });

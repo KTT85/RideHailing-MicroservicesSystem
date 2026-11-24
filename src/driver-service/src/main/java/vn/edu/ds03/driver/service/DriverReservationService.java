@@ -27,6 +27,13 @@ public class DriverReservationService {
         this.driverRepository = driverRepository;
     }
 
+    @Transactional(readOnly = true)
+    public DriverProfileResponse findReservation(String tripId) {
+        return driverRepository.findWithVehicleByCurrentTripId(normalizeIdentifier(tripId, "tripId"))
+                .map(DriverProfileResponse::from)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Reservation not found"));
+    }
+
     @Transactional
     public DriverProfileResponse reserveDriver(String driverId, String tripId) {
         String normalizedDriverId = normalizeIdentifier(driverId, "driverId");

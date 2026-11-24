@@ -3,6 +3,11 @@ import type { ChannelModel, ConfirmChannel } from "amqplib";
 import pino from "pino";
 
 export const EVENTS_EXCHANGE = "ridehailing.events";
+export const RIDE_EVENTS_EXCHANGE = "ride.events";
+export const RIDE_RESULT_EVENTS = [
+  "DriverAssigned", "NoDriverAvailable", "DriverStarted", "DriverReleased", "PaymentSucceeded", "PaymentFailed",
+  "PaymentRefunded", "PaymentRefundFailed", "PaymentReviewRequired",
+] as const;
 export const DEAD_LETTER_EXCHANGE = "ridehailing.dlx";
 export const TRIP_QUEUE = "trip-service.queue";
 export const DEAD_LETTER_QUEUE = "trip-service.dlq";
@@ -17,7 +22,7 @@ export class RabbitMQConnection {
   private channel?: ConfirmChannel;
 
   /** Opens the broker connection and declares the durable topology. */
-  async connect(url = process.env.RABBITMQ_URL): Promise<ConfirmChannel> {
+  async connect(url = process.env.RABBITMQ_URL, integrated = false): Promise<ConfirmChannel> {
     if (this.channel) return this.channel;
     if (!url) throw new Error("RABBITMQ_URL is required");
     const connection = await amqp.connect(url);
@@ -37,6 +42,10 @@ export class RabbitMQConnection {
         "x-dead-letter-routing-key": DEAD_LETTER_QUEUE,
       } });
       for (const eventType of CONSUMED_EVENTS) await channel.bindQueue(TRIP_QUEUE, EVENTS_EXCHANGE, eventType);
+      if (integrated) {
+        await channel.assertExchange(RIDE_EVENTS_EXCHANGE, "topic", { durable: true });
+        for (const eventType of RIDE_RESULT_EVENTS) await channel.bindQueue(TRIP_QUEUE, RIDE_EVENTS_EXCHANGE, eventType);
+      }
       for (const [index, queue] of RETRY_QUEUES.entries()) {
         await channel.assertQueue(queue, { durable: true, arguments: {
           "x-message-ttl": RETRY_DELAYS[index],

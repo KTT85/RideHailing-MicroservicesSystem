@@ -54,6 +54,8 @@ services:
     ports: ["127.0.0.1:8082:8080"]
     environment:
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET to a Base64 random key of at least 32 bytes}
+      JWT_ISSUER: ${JWT_ISSUER:-ds03-user-service}
+      DRIVER_INTERNAL_TOKEN: ${DRIVER_INTERNAL_TOKEN:-}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
@@ -66,15 +68,22 @@ services:
       mysql:
         condition: service_healthy
   trip-service:
-    build: ./src/trip-service
-    ports: ["127.0.0.1:8083:8080"]
+    build:
+      context: .
+      dockerfile: deploy/trip-service/Dockerfile.integrated
+    ports: ["127.0.0.1:8083:8000"]
     environment:
+      MYSQL_TRIP_PASSWORD: ${MYSQL_TRIP_PASSWORD:?Set MYSQL_TRIP_PASSWORD in .env}
+      TRIP_ENABLE_LEGACY_ROUTES: "false"
+      DS03_ENABLE_DEMO_FAILPOINTS: ${DS03_ENABLE_DEMO_FAILPOINTS:-false}
+      DS03_DEMO_FAILPOINT_TOKEN: ${DRIVER_INTERNAL_TOKEN:-}
+      USER_SERVICE_URL: http://user-service:8080
+      DRIVER_SERVICE_URL: http://driver-service:8080
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
-      MYSQL_HOST: mysql
-      MYSQL_USERNAME: trip_app
-      MYSQL_PASSWORD: ${MYSQL_TRIP_PASSWORD}
+    init: true
+    restart: unless-stopped
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -105,6 +114,7 @@ services:
     build: ./src/notification-service
     ports: ["127.0.0.1:8086:8080"]
     environment:
+      USER_SERVICE_URL: http://user-service:8080
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
@@ -120,10 +130,14 @@ services:
     build: ./src/matching-service
     ports: ["127.0.0.1:8084:8080"]
     environment:
+      DRIVER_INTERNAL_TOKEN: ${DRIVER_INTERNAL_TOKEN:-}
+      DS03_ENABLE_DEMO_FAILPOINTS: ${DS03_ENABLE_DEMO_FAILPOINTS:-false}
       RABBITMQ_HOST: rabbitmq
       RABBITMQ_USER: ${RABBITMQ_USER}
       RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
       DRIVER_SERVICE_URL: http://driver-service:8080
+    init: true
+    restart: unless-stopped
     depends_on:
       rabbitmq:
         condition: service_healthy

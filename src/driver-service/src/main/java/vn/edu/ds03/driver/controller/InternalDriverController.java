@@ -48,6 +48,11 @@ public class InternalDriverController {
         return driverReservationService.reserveDriver(driverId, request.tripId());
     }
 
+    @GetMapping("/reservations/{tripId}")
+    public DriverProfileResponse getReservation(@PathVariable String tripId) {
+        return driverReservationService.findReservation(tripId);
+    }
+
     @PostMapping("/{driverId}/start")
     public DriverProfileResponse startTrip(
             @PathVariable String driverId,

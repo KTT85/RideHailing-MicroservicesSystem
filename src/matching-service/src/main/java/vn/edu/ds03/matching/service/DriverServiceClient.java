@@ -83,6 +83,22 @@ public class DriverServiceClient {
         }
     }
 
+    public Optional<ReservedDriverDto> findReservation(String tripId) {
+        TripRequestedEvent.requireCanonicalUuid(tripId, "tripId");
+        try {
+            return Optional.ofNullable(restClient.get()
+                    .uri("/internal/drivers/reservations/{tripId}", tripId)
+                    .header(SERVICE_TOKEN_HEADER, requireInternalToken())
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .body(ReservedDriverDto.class));
+        } catch (HttpClientErrorException.NotFound ex) {
+            return Optional.empty();
+        } catch (RestClientException ex) {
+            throw new IllegalStateException("Could not look up reservation for trip", ex);
+        }
+    }
+
     private String requireInternalToken() {
         String token = properties.driverInternalToken();
         if (token == null || token.isBlank() || token.length() < MIN_TOKEN_LENGTH) {

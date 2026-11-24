@@ -25,9 +25,15 @@ public record MatchingResultEvent(
     public record Payload(
             String tripId,
             String driverId,
+            String driverUserId,
             String vehicleType,
             String licensePlate,
             Instant assignedAt,
-            String reason) {
+            String reason,
+            boolean reservationReused) {
+        public Payload(String tripId, String driverId, String vehicleType, String licensePlate,
+                       Instant assignedAt, String reason) {
+            this(tripId, driverId, null, vehicleType, licensePlate, assignedAt, reason, false);
+        }
     }
 }

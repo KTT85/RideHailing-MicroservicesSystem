@@ -23,6 +23,7 @@ public class DriverRabbitConfig {
     private static final List<String> INBOUND_EVENT_ROUTING_KEYS = List.of(
             "DriverReleaseRequested",
             "DriverRejected",
+            "DriverStartRequested",
             "TripStarted",
             "TripCompleted",
             "TripCancelled",

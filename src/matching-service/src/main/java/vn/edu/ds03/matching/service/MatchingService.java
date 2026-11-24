@@ -13,6 +13,7 @@ import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import vn.edu.ds03.matching.config.MatchingProperties;
 import vn.edu.ds03.matching.dto.DriverCandidateDto;
@@ -33,6 +34,8 @@ public class MatchingService {
     private final ReentrantLock stateLock = new ReentrantLock();
     private final Set<String> completedEventIds = Collections.newSetFromMap(createBoundedMap());
     private final Map<String, MatchingResultEvent> assignedTripsByTripId = createBoundedMap();
+    @Value("${DS03_ENABLE_DEMO_FAILPOINTS:false}")
+    private boolean demoFailpointsEnabled;
 
     public MatchingService(
             DriverServiceClient driverClient,
@@ -63,6 +66,17 @@ public class MatchingService {
             stateLock.unlock();
         }
 
+        Instant now = clock.instant();
+        Optional<ReservedDriverDto> existingReservation = driverClient.findReservation(tripId);
+        if (existingReservation.isPresent()) {
+            var reserved = existingReservation.get();
+            var assignment = buildAssignedEvent(event, tripId, reserved, now, null);
+            cacheAssignment(tripId, assignment);
+            log.info("service=matching-service event=ReservationReused tripId={} driverId={} correlationId={}",
+                    tripId, reserved.driverId(), event.correlationId());
+            return Optional.of(assignment);
+        }
+
         String requestedVehicle = event.payload().resolvedVehicleType();
         List<DriverCandidateDto> candidates = driverClient.fetchCandidates(
                 event.payload().resolvedLatitude(),
@@ -70,7 +84,6 @@ public class MatchingService {
                 requestedVehicle,
                 properties.candidateLimit());
 
-        Instant now = clock.instant();
         for (DriverCandidateDto candidate : candidates) {
             if (candidate == null || candidate.driverId() == null) {
                 continue;
@@ -79,12 +92,24 @@ public class MatchingService {
                     driverClient.tryReserveDriver(candidate.driverId(), tripId);
             if (reservedOpt.isPresent()) {
                 ReservedDriverDto reserved = reservedOpt.get();
-                MatchingResultEvent assignedEvent = buildAssignedEvent(event, tripId, candidate, reserved, now);
+                if (demoFailpointsEnabled && "F01".equals(event.payload().demoFault())) {
+                    System.err.printf("service=matching-service event=F01_AFTER_RESERVE tripId=%s driverId=%s correlationId=%s%n",
+                            tripId, reserved.driverId(), event.correlationId());
+                    Runtime.getRuntime().halt(41);
+                }
+                MatchingResultEvent assignedEvent = buildAssignedEvent(event, tripId, reserved, now, candidate);
                 cacheAssignment(tripId, assignedEvent);
                 return Optional.of(assignedEvent);
             }
         }
 
+        // A duplicate may win the reservation after the initial lookup.
+        existingReservation = driverClient.findReservation(tripId);
+        if (existingReservation.isPresent()) {
+            var assignment = buildAssignedEvent(event, tripId, existingReservation.get(), now, null);
+            cacheAssignment(tripId, assignment);
+            return Optional.of(assignment);
+        }
         return Optional.of(buildUnavailableEvent(event, tripId, now));
     }
 
@@ -109,16 +134,16 @@ public class MatchingService {
     private MatchingResultEvent buildAssignedEvent(
             TripRequestedEvent inbound,
             String tripId,
-            DriverCandidateDto candidate,
             ReservedDriverDto reserved,
-            Instant now) {
+            Instant now,
+            DriverCandidateDto candidate) {
         String outType = inbound.isDotCaseConvention() ? "driver.assigned" : "DriverAssigned";
         String plate = reserved.vehicle() != null && reserved.vehicle().licensePlate() != null
                 ? reserved.vehicle().licensePlate()
-                : candidate.licensePlate();
+                : candidate == null ? null : candidate.licensePlate();
         String vehicleType = reserved.vehicle() != null && reserved.vehicle().vehicleType() != null
                 ? reserved.vehicle().vehicleType()
-                : candidate.vehicleType();
+                : candidate == null ? inbound.payload().resolvedVehicleType() : candidate.vehicleType();
         return new MatchingResultEvent(
                 UUID.randomUUID().toString().toLowerCase(Locale.ROOT),
                 outType,
@@ -126,11 +151,13 @@ public class MatchingService {
                 now,
                 new MatchingResultEvent.Payload(
                         tripId,
-                        reserved.driverId() != null ? reserved.driverId() : candidate.driverId(),
+                        reserved.driverId() != null ? reserved.driverId() : candidate == null ? null : candidate.driverId(),
+                        reserved.userId(),
                         vehicleType,
                         plate,
                         now,
-                        null));
+                        null,
+                        candidate == null));
     }
 
     private MatchingResultEvent buildUnavailableEvent(

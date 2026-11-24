@@ -4,7 +4,7 @@ import { createDurableTripService, handleDurableTripEvent, tripTransaction } fro
 import { PrismaTripRepository } from "../../src/trip-service/src/repositories/PrismaTripRepository";
 
 const integration = process.env.TRIP_DB_TESTS === "1" ? describe : describe.skip;
-integration("PostgreSQL integration (requires migrated test database)", () => {
+integration("MySQL integration (requires migrated test database)", () => {
   const db = new PrismaClient();
   const ids: string[] = [];
   const events: string[] = [];

@@ -1,38 +1,28 @@
 # DS03 – Ride-Hailing Microservices
 
-Khung dự án bài tập lớn cho 3 thành viên. Đây là skeleton chạy độc lập của 6 service; nghiệp vụ JWT, matching, OCC, Saga, idempotency và retry/DLQ chưa được triển khai.
-
-## Phân công
-
-Xem [kế hoạch triển khai](ke_hoach.md), đặc biệt **mục 14**: chín nội dung demo bắt buộc theo đề, hai kịch bản lỗi/phục hồi, việc cần làm của TV1–TV3 và bằng chứng cần chuẩn bị.
-
-Thiết kế bảng, trường, khóa, index và ràng buộc cho từng service: [Thiết kế database DS03](docs/THIET_KE_DATABASE_DS03.md).
-
-Toàn bộ sơ đồ nghiệp vụ, nhánh lỗi, Saga và phân công triển khai nằm trong [so_do_luong.md](so_do_luong.md). Xem dạng hình có ô và mũi tên tại [trang sơ đồ](so_do_luong.html). Tài liệu phân biệt yêu cầu bắt buộc của đề với lựa chọn của nhóm.
-
-| Thành viên | Thư mục sở hữu | Nhánh |
-|---|---|---|
-| TV1 | src/user-service | feature/user-service |
-| TV1 | src/payment-service | feature/payment-service |
-| TV2 | src/driver-service | feature/driver-service |
-| TV2 | src/matching-service | feature/matching-service |
-| TV3 | src/trip-service | feature/trip-service |
-| TV3 | src/notification-service | feature/notification-service |
-
-Mỗi service là Maven project độc lập, không phụ thuộc mã Java của service khác. Matching gọi Driver qua REST; các luồng bất đồng bộ dùng RabbitMQ. Hạ tầng dữ liệu dùng một MySQL 8.4 Server chứa năm database riêng; mỗi service có tài khoản chỉ được truy cập database mình sở hữu. ORM sử dụng Spring Data JPA. Matching không dùng database.
+Dự án đặt xe gồm sáu microservice và một web demo để chạy các ca kiểm thử JWT, ghép tài xế, thanh toán, Saga hoàn tiền và phục hồi qua RabbitMQ.
 
 ## Chạy dự án
 
-Cần Java 21+, Maven 3.9+, Docker Desktop có Compose.
+Cần Docker Desktop có Compose và Node.js 20+ để chạy demo. Từ thư mục gốc của repo, chạy trong PowerShell:
 
 ```powershell
-Copy-Item .env.example .env
-docker compose up -d --build
-docker compose ps
-Invoke-RestMethod http://localhost:8081/actuator/health
+& ./scripts/ds03-demo.ps1 -Stage Up -EnableFailpoints
 ```
 
-Lần đầu tải dependency và build có thể lâu. MySQL không mở port ra máy host. RabbitMQ Management: http://localhost:15672, tài khoản trong `.env`. Mật khẩu mẫu chỉ dành cho môi trường bài tập trên máy cá nhân.
+Script tạo `.env` từ mẫu và sinh các token cần thiết nếu chưa có. `-EnableFailpoints` bật hai ca F01/F02. Lần đầu tải dependency và build có thể lâu.
+
+Mở terminal thứ hai tại thư mục gốc, rồi chạy:
+
+```powershell
+node demo/web/local-demo.cjs
+```
+
+Nếu Node báo `EADDRINUSE` ở cổng `4175`, mở [Trạm xe](http://127.0.0.1:4175/#live) để kiểm tra bản đang chạy trước khi mở thêm tiến trình.
+
+Mở [Trạm xe](http://127.0.0.1:4175/#live), bấm **Kiểm tra lại** và đợi **6/6 dịch vụ sẵn sàng**. Chọn điểm đón và điểm trả cho các ca đặt xe. Mỗi lần chạy, bảng **Kết quả demo** hiển thị phản hồi API của ca đó và đường dẫn hàng đợi quan sát nếu ca dùng RabbitMQ. Ca hiệu năng cần `k6` trong PATH hoặc biến `DS03_K6_BIN` trỏ đến tệp thực thi.
+
+Thành viên chạy web từ bản clone trên máy của mình. Web dùng Node.js để gọi các service Docker cục bộ. [RabbitMQ Management](http://127.0.0.1:15672/#/queues) dùng tài khoản trong `.env`. MySQL chỉ mở trong mạng nội bộ của Compose.
 
 | Service | Port | Database | Owner |
 |---|---|---|---|
@@ -43,18 +33,32 @@ Lần đầu tải dependency và build có thể lâu. MySQL không mở port r
 | payment | 8085 | payment_db | TV1 |
 | notification | 8086 | notification_db | TV3 |
 
-Build/test toàn bộ: `mvn -B verify`. Build riêng: `mvn -B -f src/driver-service/pom.xml verify`.
-Tắt: `docker compose down` (giữ dữ liệu trong volume). Xem logs: `docker compose logs -f trip-service`.
+Build/test các module Java cần Java 21+ và Maven 3.9+. Chạy `mvn -B verify` hoặc build riêng với `mvn -B -f src/driver-service/pom.xml verify`. Trip TypeScript có thể kiểm thử bằng `npm test` trong `src/trip-service`.
+
+Tắt stack bằng `docker compose -p ds03-demo down`. Lệnh này giữ dữ liệu trong volume. Xem log Trip bằng `docker compose -p ds03-demo logs -f trip-service`.
+
+## Phân công
+
+| Thành viên | Thư mục sở hữu | Nhánh |
+|---|---|---|
+| TV1 | src/user-service | feature/user-service |
+| TV1 | src/payment-service | feature/payment-service |
+| TV2 | src/driver-service | feature/driver-service |
+| TV2 | src/matching-service | feature/matching-service |
+| TV3 | src/trip-service | feature/trip-service |
+| TV3 | src/notification-service | feature/notification-service |
+
+User, Driver, Matching, Payment và Notification chạy Spring Boot. Trip chạy Node.js, TypeScript và Prisma. Matching gọi Driver qua REST, còn các luồng bất đồng bộ dùng RabbitMQ. Năm service có lưu dữ liệu dùng chung một máy chủ MySQL 8.4, mỗi service có database và tài khoản riêng. Matching không dùng database.
 
 ## Cấu hình MySQL
 
 Docker Compose tự khởi tạo `user_db`, `driver_db`, `trip_db`, `payment_db`, `notification_db` và năm tài khoản tương ứng qua [script khởi tạo](docker/mysql/init/01-create-databases.sh). Root chỉ dùng cho quản trị/khởi tạo; các service dùng `user_app`, `driver_app`, `trip_app`, `payment_app`, `notification_app`.
 
-Mỗi service cấu hình `spring.datasource` và `spring.jpa`. Hibernate đặt `ddl-auto: none`, chưa tạo bảng nghiệp vụ trong skeleton; schema sẽ được bổ sung theo thiết kế đã thống nhất. Không JOIN hoặc tạo foreign key xuyên database.
+Bảng nghiệp vụ được tạo bằng script khởi tạo hoặc migration của từng service. Trip chạy Prisma migration khi container khởi động. Các service chỉ truy cập database được cấp cho mình.
 
 Khi chạy Java ngoài Docker, cung cấp `MYSQL_HOST`, `MYSQL_PORT` (mặc định `3306`), `MYSQL_USERNAME`, `MYSQL_PASSWORD` cùng biến RabbitMQ. MySQL phải truy cập được từ máy chạy Java; Compose mặc định chỉ cho các container kết nối MySQL qua mạng nội bộ. JDBC trong cấu hình local tắt TLS và cho phép lấy public key; môi trường triển khai thật cần cấu hình TLS phù hợp.
 
-Script khởi tạo chỉ chạy khi volume MySQL còn mới. Thay mật khẩu trong `.env` sau lần chạy đầu không tự cập nhật tài khoản đã tồn tại; cần dùng `ALTER USER` bằng tài khoản quản trị. `docker compose down` không xóa dữ liệu. Các volume dữ liệu từ cấu hình hạ tầng cũ cũng không bị tự động xóa; skeleton chưa có dữ liệu nghiệp vụ cần chuyển đổi.
+Script khởi tạo chỉ chạy khi volume MySQL còn mới. Nếu đổi mật khẩu trong `.env` sau lần chạy đầu, cần cập nhật tài khoản MySQL tương ứng bằng `ALTER USER`.
 
 ## Làm việc nhóm
 

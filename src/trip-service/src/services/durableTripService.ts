@@ -12,7 +12,8 @@ import { TripServiceError } from "../middleware/errorHandler";
  */
 export async function tripTransaction<T>(db: PrismaClient, work: (tx: Prisma.TransactionClient) => Promise<T>): Promise<T> {
   return db.$transaction(async tx => {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(731031)`;
+    const lock = await tx.$queryRaw<{ id: number }[]>`SELECT id FROM trip_workflow_lock WHERE id = 1 FOR UPDATE`;
+    if (lock.length !== 1) throw new Error("Trip workflow lock row is missing");
     return work(tx);
   }, { maxWait: 10000, timeout: 20000 });
 }

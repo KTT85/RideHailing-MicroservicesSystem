@@ -1,13 +1,16 @@
 package vn.edu.ds03.payment.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import vn.edu.ds03.payment.exception.InvalidCommand;
 
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.UUID;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record PaymentEvent(String eventId, String eventType, String correlationId,
                            Instant timestamp, Payload payload) {
+    @JsonIgnoreProperties(ignoreUnknown = true)
     public record Payload(String tripId, String passengerId, String method,
                           BigDecimal amount, String currency, String idempotencyKey) { }
 

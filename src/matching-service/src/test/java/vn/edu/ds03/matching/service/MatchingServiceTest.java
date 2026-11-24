@@ -68,6 +68,25 @@ class MatchingServiceTest {
     }
 
     @Test
+    void redeliveryAfterRestartUsesExistingReservation() {
+        String tripId = UUID.randomUUID().toString();
+        String driverId = UUID.randomUUID().toString();
+        String userId = UUID.randomUUID().toString();
+        when(driverClient.findReservation(tripId)).thenReturn(Optional.of(
+                new ReservedDriverDto(driverId, "RESERVED", tripId,
+                        new ReservedDriverDto.VehicleInfo(UUID.randomUUID().toString(), "51A-00001", "CAR"), userId)));
+
+        var assignment = matchingService.matchTrip(sampleTripRequested("TripRequested", tripId)).orElseThrow();
+
+        assertThat(assignment.eventType()).isEqualTo("DriverAssigned");
+        assertThat(assignment.payload().driverId()).isEqualTo(driverId);
+        assertThat(assignment.payload().driverUserId()).isEqualTo(userId);
+        assertThat(assignment.payload().reservationReused()).isTrue();
+        verify(driverClient, never()).fetchCandidates(any(), any(), anyString(), anyInt());
+        verify(driverClient, never()).tryReserveDriver(anyString(), eq(tripId));
+    }
+
+    @Test
     @DisplayName("matchTrip skips 409 OCC-conflicted candidate and reserves next available candidate")
     void matchTrip_firstCandidateConflictsSecondSucceeds_returnsDriverAssigned() {
         String tripId = UUID.randomUUID().toString();
