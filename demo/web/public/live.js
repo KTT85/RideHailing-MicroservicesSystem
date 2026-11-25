@@ -10,10 +10,22 @@
   function renderFlow(container, label, result) {
     const steps = result.steps ?? [];
     const awaiting = result.phase === 'awaiting-restart';
+    const metrics = result.kind === 'performance'
+      ? steps.find(step => step.action === 'k6 · kết quả thực tế')?.data : undefined;
+    const number = new Intl.NumberFormat('vi-VN', { maximumFractionDigits: 2 });
+    const performanceDetail = metrics && [
+      [metrics.requests, value => number.format(value) + ' yêu cầu'],
+      [metrics.requestsPerSecond, value => number.format(value) + ' yêu cầu/giây'],
+      [metrics.p95Milliseconds, value => 'p95 ' + number.format(value) + ' ms'],
+      [metrics.errorRate, value => number.format(value * 100) + '% lỗi HTTP'],
+      [metrics.virtualUsers, value => number.format(value) + ' người dùng ảo'],
+      [metrics.durationSeconds, value => number.format(value) + ' giây'],
+    ].filter(([value]) => Number.isFinite(value)).map(([value, format]) => format(value)).join(' · ');
     const summary = {
       time: result.time, action: label, ok: awaiting ? undefined : result.ok,
       outcome: awaiting ? 'pending' : undefined,
-      detail: result.error || (awaiting ? 'Đã xếp hàng, chờ khởi động lại Payment' : 'Hoàn tất ' + steps.length + ' bước'),
+      detail: [performanceDetail, result.error ||
+        (awaiting ? 'Đã xếp hàng, chờ khởi động lại Payment' : 'Hoàn tất ' + steps.length + ' bước')].filter(Boolean).join(' · '),
     };
     const flow = el('div', 'log-scroll');
     for (const [index, step] of [summary, ...steps].entries()) {

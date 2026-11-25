@@ -1,5 +1,5 @@
 -- CreateTable
-CREATE TABLE `trips` (
+CREATE TABLE IF NOT EXISTS `trips` (
     `id` CHAR(36) NOT NULL,
     `passenger_id` CHAR(36) NOT NULL,
     `driver_id` CHAR(36) NULL,
@@ -32,7 +32,7 @@ CREATE TABLE `trips` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 -- CreateTable
-CREATE TABLE `outbox_events` (
+CREATE TABLE IF NOT EXISTS `outbox_events` (
     `id` CHAR(36) NOT NULL,
     `aggregate_id` CHAR(36) NOT NULL,
     `event_type` VARCHAR(100) NOT NULL,
@@ -46,7 +46,7 @@ CREATE TABLE `outbox_events` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 -- CreateTable
-CREATE TABLE `processed_events` (
+CREATE TABLE IF NOT EXISTS `processed_events` (
     `event_id` CHAR(36) NOT NULL,
     `processed_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
@@ -54,11 +54,11 @@ CREATE TABLE `processed_events` (
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 -- CreateTable
-CREATE TABLE `trip_workflow_lock` (
+CREATE TABLE IF NOT EXISTS `trip_workflow_lock` (
     `id` INTEGER NOT NULL,
 
     PRIMARY KEY (`id`)
 ) DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_bin;
 
 
-INSERT INTO trip_workflow_lock (id) VALUES (1);
+INSERT IGNORE INTO trip_workflow_lock (id) VALUES (1);

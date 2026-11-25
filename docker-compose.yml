@@ -69,12 +69,12 @@ services:
         condition: service_healthy
   trip-service:
     build:
-      context: .
-      dockerfile: deploy/trip-service/Dockerfile.integrated
-    ports: ["127.0.0.1:8083:8000"]
+      context: ./src/trip-service
+    ports: ["127.0.0.1:8083:8080"]
     environment:
-      MYSQL_TRIP_PASSWORD: ${MYSQL_TRIP_PASSWORD:?Set MYSQL_TRIP_PASSWORD in .env}
-      TRIP_ENABLE_LEGACY_ROUTES: "false"
+      MYSQL_HOST: mysql
+      MYSQL_USERNAME: trip_app
+      MYSQL_PASSWORD: ${MYSQL_TRIP_PASSWORD:?Set MYSQL_TRIP_PASSWORD in .env}
       DS03_ENABLE_DEMO_FAILPOINTS: ${DS03_ENABLE_DEMO_FAILPOINTS:-false}
       DS03_DEMO_FAILPOINT_TOKEN: ${DRIVER_INTERNAL_TOKEN:-}
       USER_SERVICE_URL: http://user-service:8080

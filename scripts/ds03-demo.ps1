@@ -1,9 +1,8 @@
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)]
-    [ValidateSet('Up', 'Health', 'Driver', 'Race', 'TripMock')]
+    [ValidateSet('Up', 'Health', 'Driver', 'Race')]
     [string]$Stage,
-    [string]$TripBase = 'http://127.0.0.1:8083',
     [switch]$EnableFailpoints,
     [ValidateRange(1, 65535)][int]$UserPort = 8081,
     [ValidateRange(1, 65535)][int]$PaymentPort = 8085,
@@ -208,36 +207,8 @@ function Test-DriverRace($DriverProfile, [hashtable]$DriverHeaders, [string]$Ser
     }
 }
 
-function Test-TripMock {
-    $route = "$($TripBase.TrimEnd('/'))/api/trips"
-    $headers = @{ 'X-Correlation-Id' = [guid]::NewGuid().ToString(); 'Idempotency-Key' = [guid]::NewGuid().ToString() }
-    $body = @{
-        passengerId = [guid]::NewGuid().ToString()
-        pickup = @{ lat = 10.7626; lng = 106.6602 }
-        dropoff = @{ lat = 10.7769; lng = 106.7009 }
-    }
-    $created = Invoke-DemoJson POST $route $body $headers -Code 201
-    Assert-Equal $created.data.status 'REQUESTED' 'Created trip state'
-    $id = $created.data.id
-    if (-not $id) { throw 'Trip create response has no data.id.' }
-    Write-Host "tripId=$id correlationId=$($headers['X-Correlation-Id'])"
-    $duplicate = Invoke-DemoJson POST $route $body $headers -Code 201
-    Assert-Equal $duplicate.data.id $id 'Duplicate create reuses trip ID'
-    $accepted = Invoke-DemoJson POST "$route/$id/accept" @{ driverId = [guid]::NewGuid().ToString() } $headers
-    Assert-Equal $accepted.data.status 'ACCEPTED' 'Mock trip accepted'
-    $started = Invoke-DemoJson POST "$route/$id/start" @{} $headers
-    Assert-Equal $started.data.status 'IN_PROGRESS' 'Mock trip started'
-    $null = Invoke-DemoJson POST "$route/$id/cancel" @{ reason = 'Demo cancellation' } $headers -Code 409
-    $null = Invoke-DemoJson POST "$route/$id/complete" @{ fare = 50000 } $headers
-    $final = Invoke-DemoJson GET "$route/$id" -Headers $headers
-    Assert-Equal $final.data.status 'COMPLETED' 'Mock final trip state'
-    Assert-Equal $final.data.fare 50000 'Mock final fare'
-}
-
 try {
-    if ($Stage -eq 'TripMock') {
-        Test-TripMock
-    } elseif ($Stage -eq 'Health') {
+    if ($Stage -eq 'Health') {
         Test-DemoHealth
     } else {
         $driverServiceToken = $env:DRIVER_INTERNAL_TOKEN

@@ -29,12 +29,15 @@ services:
       retries: 20
   trip:
     build:
-      context: .
-      dockerfile: deploy/trip-service/Dockerfile.integrated
+      context: ./src/trip-service
     environment:
-      MYSQL_TRIP_PASSWORD: ${TRIP_DB_PASSWORD:?Set TRIP_DB_PASSWORD}
-      RABBITMQ_URL: ${TRIP_RABBITMQ_URL:?Set TRIP_RABBITMQ_URL with rabbitmq hostname}
-    ports: ["127.0.0.1:8083:8000"]
+      MYSQL_HOST: mysql
+      MYSQL_USERNAME: trip_app
+      MYSQL_PASSWORD: ${TRIP_DB_PASSWORD:?Set TRIP_DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+    ports: ["127.0.0.1:8083:8080"]
     restart: on-failure
     depends_on:
       mysql:
