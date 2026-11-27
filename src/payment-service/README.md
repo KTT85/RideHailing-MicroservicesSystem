@@ -18,52 +18,6 @@ Spring Data JPA, MySQL, RabbitMQ, Spring Security JWT.
 Trip kiểm tra quyền và trạng thái chuyến trước khi phát lệnh. Payment không trực
 tiếp truy cập DB Trip/User/Driver. Không kết nối ngân hàng hoặc cổng thanh toán thật.
 
-## Chạy local như User service, chưa cần Docker
-
-RabbitMQ đã có bộ chạy portable riêng tại root. Xem
-[hướng dẫn RabbitMQ](../../deploy/rabbitmq/README.md). Lệnh gom khởi động broker và
-Payment: `./scripts/start-payment-local.ps1` từ root dự án.
-
-Lệnh gom tự nạp khóa JWT local được mã hóa; chạy User trong terminal khác bằng
-`./scripts/start-user-local.ps1` để dùng chung khóa. Không cần truyền khóa qua
-clipboard. Các lệnh trực tiếp trong thư mục service bên dưới vẫn yêu cầu đặt
-JWT_SECRET nếu chưa nạp khóa.
-
-1. MySQL local đang chạy, database `payment_db` đã tạo. Trong Workbench dùng tài
-   khoản quản trị tạo account riêng nếu chưa có (thay placeholder trước khi chạy):
-
-```sql
-CREATE USER IF NOT EXISTS 'payment_app'@'localhost'
-    IDENTIFIED BY '<MAT_KHAU_TU_CHON>';
-GRANT ALL PRIVILEGES ON payment_db.* TO 'payment_app'@'localhost';
-```
-
-`CREATE USER IF NOT EXISTS` không đổi mật khẩu account đã tồn tại. Không dùng
-account User service hoặc root để chạy Payment.
-
-2. Chạy `./scripts/rabbitmq/start.ps1` từ root: broker portable ở
-   `127.0.0.1:5672`, Management `http://localhost:15672`, login local guest/guest.
-   Không cần tải thêm EXE hoặc Docker. Trên checkout mới chạy setup.ps1 trước.
-
-3. Trong PowerShell tại root dự án, chạy:
-
-```powershell
-./src/payment-service/scripts/start-local.ps1
-```
-
-Script hỏi mật khẩu MySQL và JWT_SECRET bằng nhập ẩn. JWT_SECRET là chuỗi Base64
-đang dùng ở User service, không tạo khóa khác nếu muốn dùng token User đã cấp.
-Các bí mật chỉ giữ trong environment của terminal, không ghi vào repo. Script tạo
-service token ngẫu nhiên nếu chưa có; giữ cùng giá trị cho Trip và giữa các lần
-restart. Nếu tự chạy Maven, cần đặt MYSQL_PASSWORD, JWT_SECRET,
-PAYMENT_INTERNAL_TOKEN và SPRING_PROFILES_ACTIVE=local. Mặc định local RabbitMQ
-dùng guest/guest trên loopback; có thể đặt RABBITMQ_USER/RABBITMQ_PASSWORD riêng.
-
-4. Postman gọi `GET http://localhost:8085/actuator/health`.
-5. Import `tests/Payment.local.postman_collection.json`, làm theo
-   [hướng dẫn test](docs/TESTING.md). Collection login qua User ở cổng 8081,
-   dùng RabbitMQ Management mô phỏng lệnh của Trip và đọc kết quả Payment.
-
 ## Database đã tạo bằng tay
 
 Flyway tự chạy khi Payment khởi động, dùng account payment_app:

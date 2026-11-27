@@ -16,18 +16,13 @@ Yêu cầu: Docker Desktop đang chạy Linux containers (WSL 2 trên Windows).
 Từ thư mục gốc dự án:
 
 ```powershell
-./scripts/start-payment-docker.ps1
-./scripts/test-payment-docker.ps1
+./scripts/ds03-demo.ps1 -Stage Up
 ```
 
-Lệnh đầu tự tạo `.env.docker-payment` với mật khẩu ngẫu nhiên, kiểm tra Compose,
-build Payment bằng Java 21 và chờ MySQL, RabbitMQ, Payment healthy. Không cần cài
-Java/Maven trên host để build image. Chỉ ba container này được khởi động, dùng
-project `htpt-payment` và các volume riêng với MySQL local trên Windows.
+Lệnh này chạy toàn bộ hệ thống trong project `ds03-demo`. Script tạo `.env`
+từ mẫu nếu cần. Giữ file này cho các lần chạy sau: đổi mật khẩu trong file
+không tự đổi mật khẩu trong volume MySQL đã khởi tạo.
 
-File môi trường được Git ignore. Giữ file này cho các lần chạy sau: đổi mật khẩu
-trong file không tự đổi mật khẩu của tài khoản trong volume MySQL đã khởi tạo.
-Các biến trong file này được script ưu tiên trong lúc chạy rồi khôi phục terminal.
 
 | Thành phần | Địa chỉ từ máy Windows |
 |---|---|
@@ -37,25 +32,18 @@ Các biến trong file này được script ưu tiên trong lúc chạy rồi kh
 
 Đăng nhập RabbitMQ bằng RABBITMQ_USER/RABBITMQ_PASSWORD trong file môi trường
 local. Không chia sẻ hoặc commit file đó. Nếu cổng đang có ứng dụng local dùng,
-sửa PAYMENT_HTTP_PORT, RABBITMQ_AMQP_PORT, RABBITMQ_MANAGEMENT_PORT trong file rồi
-chạy lại script; các cổng nội bộ container không thay đổi.
+truyền -PaymentPort cho ds03-demo.ps1 hoặc đổi RABBITMQ_AMQP_PORT và
+RABBITMQ_MANAGEMENT_PORT trong .env rồi chạy lại.
 
-Bài smoke test tạo một trip UUID mới, gửi PAY qua RabbitMQ, chờ SUCCESS, gửi lại
-cùng command, gửi REFUND, kiểm tra hai operation và số tiền hoàn 50000 VND. Test
-cũng chờ các sự kiện PaymentSucceeded/PaymentRefunded được outbox phát qua broker.
-Queue quan sát được xóa khi kết thúc; dữ liệu demo giữ trong payment_db của Docker
-để có thể xem lại. Không truy cập payment_db của MySQL chạy trên Windows.
+Để kiểm tra thanh toán, hoàn tiền và JWT của User bằng Postman, xem
+[hướng dẫn kiểm thử](TESTING.md#local-postman-harness).
 
 ```powershell
-# Trạng thái
-./scripts/start-payment-docker.ps1 -Action Status
-
-# Xem log (không in toàn bộ config đã thay biến vì có mật khẩu)
-docker compose --project-name htpt-payment --env-file .env.docker-payment logs --tail 100 payment-service
-
-# Dừng, giữ nguyên dữ liệu
-./scripts/start-payment-docker.ps1 -Action Down
+docker compose -p ds03-demo ps
+docker compose -p ds03-demo logs --tail 100 payment-service
+docker compose -p ds03-demo down
 ```
+
 
 Để xem MySQL, mở terminal trong container mysql từ Docker Desktop rồi dùng:
 

@@ -73,12 +73,8 @@ killed and restarted. Run the live cases below to meet the instructor's demo.
 
 ## Local Postman harness
 
-RabbitMQ portable: từ root chạy `./scripts/rabbitmq/start.ps1`. Chạy kiểm thử
-listener với broker thật bằng `./scripts/rabbitmq/test-payment.ps1`: dùng vhost
-payment-test riêng, H2 cho database, không đụng payment_db. Chi tiết thao tác và
-cổng ở `deploy/rabbitmq/README.md` tại root.
-
-Start User, Payment, MySQL and RabbitMQ with its Management plugin. Import
+Start the stack from the repository root with `./scripts/ds03-demo.ps1 -Stage Up`.
+See the [Docker instructions](DOCKER.md). Import
 `tests/Payment.local.postman_collection.json`. Set local collection variables:
 loginIdentifier/loginPassword, rabbitUser/rabbitPassword. Secrets/tokens must not
 be exported or committed. The login response stores passengerId/accessToken.

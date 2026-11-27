@@ -64,7 +64,7 @@ Script khởi tạo chỉ chạy khi volume MySQL còn mới. Nếu đổi mật
 
 ## Làm việc nhóm
 
-Đọc [hướng dẫn Git flow](docs/GIT_WORKFLOW.md) trước khi code. Thống nhất API và payload event với nhóm trước khi nối các service.
+Thống nhất API và payload event với nhóm trước khi nối các service.
 CI kiểm tra build, kết nối database của năm tài khoản, chặn truy cập chéo database và health của sáu service. Khi triển khai nghiệp vụ, bổ sung test trong từng service và test tích hợp cho OCC, Saga, recovery, idempotency và DLQ.
 
 Phiên bản nền: Java 21, Spring Boot 4.1.1. Tài liệu chính thức: https://docs.spring.io/spring-boot/ . Không tự nâng version riêng từng service.

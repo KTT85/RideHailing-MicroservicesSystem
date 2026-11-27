@@ -1,42 +1,30 @@
 # User + Payment trong Docker
 
-Từ thư mục gốc, với Docker Desktop Linux Engine đang chạy:
+Bật Docker Desktop với Linux Engine. Từ thư mục gốc, khởi động hệ thống dùng chung:
 
 ```powershell
-./scripts/start-user-docker.ps1
-# Khi da co code Payment day du tren nhanh tich hop:
-./scripts/start-payment-docker.ps1 -WithUser
-./scripts/test-user-payment-docker.ps1
+./scripts/ds03-demo.ps1 -Stage Up
 ```
 
-Lệnh start-user chỉ khởi động User cùng MySQL và RabbitMQ. Lệnh -WithUser chạy cả
-User lẫn Payment. Cả hai dùng Compose chung, project `htpt-payment`, tái sử dụng
-`.env.docker-payment` và volume hiện có, không
-tạo khóa JWT khác giữa hai service. Nếu file môi trường chưa có, script tạo
-mật khẩu và khóa ngẫu nhiên. File này được Git ignore; không commit hoặc chia sẻ.
+Script dùng project `ds03-demo` và tạo `.env` từ mẫu nếu cần. User và Payment
+dùng chung khóa JWT và issuer từ cấu hình Compose. Giữ `.env` trên máy.
 
 User: http://localhost:8081/actuator/health; Payment: http://localhost:8085/actuator/health.
-Đổi USER_HTTP_PORT/PAYMENT_HTTP_PORT trong file môi trường nếu cổng đang bận.
-Container vẫn dùng cổng 8080; DNS MySQL/RabbitMQ lần lượt là mysql/rabbitmq.
+Nếu cần đổi cổng User hoặc Payment, truyền `-UserPort` hoặc `-PaymentPort` khi chạy
+`ds03-demo.ps1`.
 
 Image User được build bằng Java 21, runtime chỉ có JRE, chạy bằng userapp UID
-10001 và có HTTP healthcheck. Flyway tự tạo users trên database mới và kiểm soát
-phiên bản schema. Không dùng Hibernate ddl-auto=update để tạo bảng.
-
-Bài smoke test đăng ký hai Passenger và một Driver với email/phone ngẫu nhiên,
-đăng nhập, gọi /users/me, kiểm tra sai mật khẩu và thiếu JWT đều trả 401. Sau đó
-gửi PAY qua RabbitMQ với passengerId của tài khoản vừa tạo, dùng JWT User cấp để
-đọc Payment: chủ tài khoản nhận SUCCESS, Passenger khác và Driver nhận 403.
-Mật khẩu/JWT không in ra log; các tài khoản và payment demo được giữ trong MySQL
-Docker để kiểm tra, không tác động MySQL chạy trên Windows.
+10001 và có HTTP healthcheck. Flyway tự tạo bảng users trên database mới và kiểm
+soát phiên bản schema.
 
 ```powershell
-./scripts/start-user-docker.ps1 -Action Status
-docker compose --project-name htpt-payment --env-file .env.docker-payment logs --tail 100 user-service
-
-# Dừng cả project User/Payment, giữ volume dữ liệu.
-./scripts/start-user-docker.ps1 -Action Down
+docker compose -p ds03-demo ps
+docker compose -p ds03-demo logs --tail 100 user-service
+docker compose -p ds03-demo down
 ```
+
+Để kiểm tra luồng User JWT và Payment bằng Postman, xem
+[hướng dẫn Payment](../payment-service/docs/TESTING.md#local-postman-harness).
 
 ## Kiểm chứng 31/10/2026
 
@@ -49,8 +37,3 @@ docker compose --project-name htpt-payment --env-file .env.docker-payment logs -
 
 Đây là tích hợp User/Payment với MySQL/RabbitMQ thật. Trip command vẫn do script
 mô phỏng; chưa kiểm chứng luồng chuyến đi/Saga với Trip/Notification.
-
-Nhánh feature/user-service chỉ chứa thay đổi User và cấu hình dùng chung.
-Để chạy test-user-payment-docker.ps1 trên checkout mới, cần có cả phần Payment
-đã triển khai từ feature/payment-service (sau khi tích hợp hai nhánh vào develop).
-User có thể build/chạy độc lập bằng start-user-docker.ps1 trước khi ghép Payment.
